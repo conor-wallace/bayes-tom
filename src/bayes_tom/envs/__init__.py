@@ -30,9 +30,9 @@ def make_env(env_name: str, env_kwargs: dict = {}):
         }
         default_viewer_args = {"highlight_agent_idx": 0} # None to disable highlighting
 
-        from envs.lbf.lbf_wrapper import LBFWrapper
-        from envs.lbf.reward_shaping_lbf_wrapper import RewardShapingLBFWrapper
-        from envs.lbf.adhoc_lbf_viewer import AdHocLBFViewer
+        from bayes_tom.envs.lbf.lbf_wrapper import LBFWrapper
+        from bayes_tom.envs.lbf.reward_shaping_lbf_wrapper import RewardShapingLBFWrapper
+        from bayes_tom.envs.lbf.adhoc_lbf_viewer import AdHocLBFViewer
 
         generator_args, env_kwargs_copy = process_default_args(env_kwargs, default_generator_args)
         viewer_args, env_kwargs_copy = process_default_args(env_kwargs_copy, default_viewer_args)
@@ -74,8 +74,8 @@ def make_env(env_name: str, env_kwargs: dict = {}):
             if key not in env_kwargs:
                 env_kwargs_copy[key] = default_env_kwargs[key]
 
-        from envs.overcooked.augmented_layouts import augmented_layouts
-        from envs.overcooked.overcooked_wrapper import OvercookedWrapper
+        from bayes_tom.envs.overcooked.augmented_layouts import augmented_layouts
+        from bayes_tom.envs.overcooked.overcooked_wrapper import OvercookedWrapper
 
         layout = augmented_layouts[env_kwargs['layout']]
         env_kwargs_copy["layout"] = layout
@@ -91,7 +91,7 @@ def make_env(env_name: str, env_kwargs: dict = {}):
             "num_cards_of_rank": np.array([3, 2, 2, 2, 1]),
         }
 
-        from envs.hanabi.hanabi_wrapper import HanabiWrapper
+        from bayes_tom.envs.hanabi.hanabi_wrapper import HanabiWrapper
         env_kwargs = default_env_kwargs
         env = HanabiWrapper(**env_kwargs)
 

@@ -1,5 +1,7 @@
 ENV_NAME: lbf
+EVAL_SEED: 34957
 ROLLOUT_LENGTH: 128
+NUM_EVAL_EPISODES: 3
 ENV_KWARGS: {}
 TASK_NAME: lbf
 
@@ -28,7 +30,7 @@ test_team_path: /home/bhd445/projects/jax-aht/results/lbf/comedi/default_label/2
 ego_agent: # partner config for ppo_ego
   # Only specify ONE partner agent type. Must be RL-based.
   ippo: # Name of the partner agent type. Can be arbitrary.
-    path: ${task.train_team_path}
+    path: /home/bhd445/projects/jax-aht/results/lbf/comedi/default_label/2026-03-07_12-47-01/saved_train_run/
     actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
     ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -39,7 +41,7 @@ ego_agent: # partner config for ppo_ego
 train_partner_agent: # partner config for ppo_ego
   # Only specify ONE partner agent type. Must be RL-based.
   ippo: # Name of the partner agent type. Can be arbitrary.
-    path: ${task.train_team_path}
+    path: /home/bhd445/projects/jax-aht/results/lbf/comedi/default_label/2026-03-07_12-47-01/saved_train_run/
     actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
     ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -50,7 +52,7 @@ train_partner_agent: # partner config for ppo_ego
 test_partner_agent: # partner config for ppo_ego
   # Only specify ONE partner agent type. Must be RL-based.
   ippo: # Name of the partner agent type. Can be arbitrary.
-    path: ${task.train_team_path}
+    path: /home/bhd445/projects/jax-aht/results/lbf/comedi/default_label/2026-03-07_12-47-01/saved_train_run/
     actor_type: actor_with_conditional_critic  # actor_with_conditional_critic # e.g. s5, rnn, mlp
     ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.

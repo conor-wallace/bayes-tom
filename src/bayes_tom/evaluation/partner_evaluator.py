@@ -720,9 +720,9 @@ def evaluate(
                 episode_rng, env, ego_agent, ego_params, 
                 partner_population, partner_params, 
                 partner_idx_batched,  # Pass as array instead of scalar
-                max_episode_steps=config["task"]["ROLLOUT_LENGTH"],
+                max_episode_steps=config["ROLLOUT_LENGTH"],
                 partner_child_idx=partner_child_idx,
-                # max_episode_steps=config["task"]["agent_model"]["probe_steps"]+1
+                # max_episode_steps=config["agent_model"]["probe_steps"]+1
             )
             result["episode_idx"] = episode_idx
             result["partner_idx"] = partner_idx
@@ -786,8 +786,8 @@ def learn(config, env, rng, num_episodes, ego_agent, ego_params,
     ego_agent.is_learning = True
 
     behavior_model_dir = os.path.join(
-        str(config["task"]["agent_model"]["behavior_model_path"]),
-        str(config["task"]["ENV_NAME"]),
+        str(config["agent_model"]["behavior_model_path"]),
+        str(config["ENV_NAME"]),
     )
 
     if not os.path.exists(behavior_model_dir):
@@ -795,12 +795,12 @@ def learn(config, env, rng, num_episodes, ego_agent, ego_params,
 
     pbar = tqdm(
         desc="Learning from prior experience...",
-        total=int(config["task"]["agent_model"]["num_episodes"]) * int(num_partner_total)
+        total=int(config["agent_model"]["num_episodes"]) * int(num_partner_total)
     )
     for partner_idx in range(num_partner_total):
         traces = []
         rng, partner_rng = jax.random.split(rng)
-        for episode_idx in range(config["task"]["agent_model"]["num_episodes"]):
+        for episode_idx in range(config["agent_model"]["num_episodes"]):
             # partner_idx = 1
             ego_agent.reset()
             partner_idx_batched = jnp.array([partner_idx])
@@ -810,8 +810,8 @@ def learn(config, env, rng, num_episodes, ego_agent, ego_params,
                 partner_population, partner_params, 
                 partner_idx_batched,  # Pass as array instead of scalar
                 episode_idx,
-                # max_episode_steps=config["task"]["agent_model"]["probe_steps"],
-                max_episode_steps=config["task"]["ROLLOUT_LENGTH"],
+                # max_episode_steps=config["agent_model"]["probe_steps"],
+                max_episode_steps=config["ROLLOUT_LENGTH"],
                 partner_child_idx=partner_child_idx,
             )
 
@@ -841,10 +841,10 @@ def probe(config, env, rng, num_episodes, ego_population, ego_params,
 
     for probe_length in probe_lengths:
         print(f"Evaluating Probe Length: {probe_length}")
-        config["task"]["agent_model"]["probe_steps"] = probe_length
+        config["agent_model"]["probe_steps"] = probe_length
 
         llm_client = ChatClient(
-            model_name=config["task"]["agent_model"]["model_name"],
+            model_name=config["agent_model"]["model_name"],
         )
 
         ego_agent = LLMInversePlanningAgent(
@@ -902,10 +902,10 @@ def sweep_alpha(config, env, rng, num_episodes, ego_population, ego_params,
 
     for alpha in alpha_values:
         print(f"Evaluating Alpha: {alpha:.2f}")
-        config["task"]["agent_model"]["alpha"] = alpha
+        config["agent_model"]["alpha"] = alpha
 
         llm_client = ChatClient(
-            model_name=config["task"]["agent_model"]["model_name"],
+            model_name=config["agent_model"]["model_name"],
         )
 
         ego_agent = BayesToMAgent(
@@ -966,18 +966,18 @@ def run_partner_evaluation(config, print_metrics=False):
     alpha_values = config.get("task", {}).get("agent_model", {}).get("alpha_values", [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
     dataset_path = config.get("task", {}).get("agent_model", {}).get("dataset_path", None)
     dataset_episodes = config.get("task", {}).get("agent_model", {}).get("dataset_episodes", 100)
-    num_eval_episodes = config["global_heldout_settings"]["NUM_EVAL_EPISODES"]
+    num_eval_episodes = config["NUM_EVAL_EPISODES"]
 
     # Create only one environment instance
     env = make_env(config["ENV_NAME"], config["ENV_KWARGS"])
     env = LogWrapper(env)
     
-    rng = jax.random.PRNGKey(config["global_heldout_settings"]["EVAL_SEED"])
+    rng = jax.random.PRNGKey(config["EVAL_SEED"])
     rng, ego_init_rng, partner_init_rng, eval_rng = jax.random.split(rng, 4)
 
     # Load train/test partner populations
-    train_partner_agent_config = dict(config["task"]["train_partner_agent"])
-    test_partner_agent_config = dict(config["task"]["test_partner_agent"])
+    train_partner_agent_config = dict(config["train_partner_agent"])
+    test_partner_agent_config = dict(config["test_partner_agent"])
     
     train_partner_name = list(train_partner_agent_config.keys())[0]
     test_partner_name = list(test_partner_agent_config.keys())[0]
@@ -1027,7 +1027,7 @@ def run_partner_evaluation(config, print_metrics=False):
             print("Warning: requested nested IQL test partners, but none were loaded. Falling back to default test partner population.")
 
     # Load best-response population
-    ego_agent_config = dict(config["task"]["ego_agent"])
+    ego_agent_config = dict(config["ego_agent"])
     
     ego0_name = list(ego_agent_config.keys())[0]
     ego0_agent_config = list(ego_agent_config.values())[0]
@@ -1047,7 +1047,7 @@ def run_partner_evaluation(config, print_metrics=False):
     llm_client = None
     if agent_type in llm_agents:
         llm_client = ChatClient(
-            model_name=config["task"]["agent_model"]["model_name"],
+            model_name=config["agent_model"]["model_name"],
         )
 
     # Handle different modes
@@ -1157,9 +1157,9 @@ def run_partner_evaluation(config, print_metrics=False):
     df = pd.DataFrame(results)
 
     results_dir = os.path.join(
-        str(config["task"]["results_path"]),
-        str(config["task"]["agent_model"]["model_name"]),
-        str(config["task"]["ENV_NAME"]),
+        str(config["results_path"]),
+        str(config["agent_model"]["model_name"]),
+        str(config["ENV_NAME"]),
         ego_agent.method
     )
 

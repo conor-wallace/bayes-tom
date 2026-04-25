@@ -1,10 +1,12 @@
 import jax
 import jax.numpy as jnp
-from envs.lbf.lbf_wrapper import LBFWrapper
 from jumanji.environments.routing.lbf.constants import LOAD
 from typing import Dict, Any
 from flax.struct import dataclass
 from functools import partial
+
+from .lbf_wrapper import LBFWrapper
+
 
 @dataclass
 class RewardShapingEnvState:
