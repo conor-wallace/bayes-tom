@@ -15,7 +15,8 @@ from tqdm import tqdm
 from bayes_tom.agents import load_agent
 from bayes_tom.agents.llm import ChatClient
 from bayes_tom.agents.population_interface import AgentPopulation, NestedAgentPopulation
-from bayes_tom.envs import make_env, LogWrapper
+from bayes_tom.envs import make_env
+from bayes_tom.envs.log_wrapper import LogWrapper
 from bayes_tom.utils.agent_loader_from_config import initialize_rl_agent_from_config
 from bayes_tom.utils.history import ProbeTrace
 

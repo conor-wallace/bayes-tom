@@ -1,0 +1,110 @@
+import copy
+import numpy as np
+
+import jaxmarl
+import jumanji
+from jumanji.environments.routing.lbf.generator import RandomGenerator as LbfGenerator
+
+def process_default_args(env_kwargs: dict, default_args: dict):
+    '''Helper function to process generator and viewer args for Jumanji environments. 
+    If env_args and default_args have any key overlap, overwrite 
+    args in default_args with those in env_args, deleting those in env_args
+    '''
+    env_kwargs_copy = dict(copy.deepcopy(env_kwargs))
+    default_args_copy = dict(copy.deepcopy(default_args))
+    for key in env_kwargs:
+        if key in default_args:
+            default_args_copy[key] = env_kwargs[key]
+            del env_kwargs_copy[key]
+    return default_args_copy, env_kwargs_copy
+
+def make_env(env_name: str, env_kwargs: dict = {}):
+    if env_name in ['lbf', 'lbf-reward-shaping']:
+        default_generator_args = {
+            "grid_size": 7,
+            "fov": 7, 
+            "num_agents": 2,
+            "num_food": 3, 
+            "max_agent_level": 2,
+            "force_coop": True,
+        }
+        default_viewer_args = {"highlight_agent_idx": 0} # None to disable highlighting
+
+        from envs.lbf.lbf_wrapper import LBFWrapper
+        from envs.lbf.reward_shaping_lbf_wrapper import RewardShapingLBFWrapper
+        from envs.lbf.adhoc_lbf_viewer import AdHocLBFViewer
+
+        generator_args, env_kwargs_copy = process_default_args(env_kwargs, default_generator_args)
+        viewer_args, env_kwargs_copy = process_default_args(env_kwargs_copy, default_viewer_args)
+        env = jumanji.make('LevelBasedForaging-v0', 
+                            generator=LbfGenerator(**generator_args),
+                            **env_kwargs_copy,
+                            viewer=AdHocLBFViewer(grid_size=generator_args["grid_size"],
+                                                  **viewer_args))
+
+        if env_name == 'lbf-reward-shaping':
+            env = RewardShapingLBFWrapper(env, share_rewards=True)
+        else:
+            env = LBFWrapper(env, share_rewards=True)
+        
+    elif env_name == 'overcooked-v1':
+        default_env_kwargs = {
+            "random_reset": True,
+            "random_obj_state": False,
+            "max_steps": 400
+        }
+        
+        # preprocess env_kwargs to maintain compatibility with symmetric reward shaping
+        if "reward_shaping_params" in env_kwargs:
+            for param in env_kwargs["reward_shaping_params"]:
+                payload = env_kwargs["reward_shaping_params"][param]
+                if type(payload) == int or type(payload) == float:
+                    # turn the param into symmetric form
+                    env_kwargs["reward_shaping_params"][param] = [payload, payload] 
+                elif type(payload) == tuple or type(payload) == list:
+                    # this is the correct format
+                    pass 
+                else:
+                    print(f"\n[Environment Instantiation Error] {type(payload)} is not valid type as a reward shaping parameter for {param}.\n")
+                    exit()
+
+        env_kwargs_copy = dict(copy.deepcopy(env_kwargs))
+        # add default args that are not already in env_kwargs
+        for key in default_env_kwargs:
+            if key not in env_kwargs:
+                env_kwargs_copy[key] = default_env_kwargs[key]
+
+        from envs.overcooked.augmented_layouts import augmented_layouts
+        from envs.overcooked.overcooked_wrapper import OvercookedWrapper
+
+        layout = augmented_layouts[env_kwargs['layout']]
+        env_kwargs_copy["layout"] = layout
+        env = OvercookedWrapper(**env_kwargs_copy)
+    
+    elif env_name == 'hanabi':
+        default_env_kwargs = {
+            "num_agents": 2,
+            "num_colors": 5,
+            "num_ranks": 5,
+            "max_info_tokens": 8,
+            "max_life_tokens": 3,
+            "num_cards_of_rank": np.array([3, 2, 2, 2, 1]),
+        }
+
+        from envs.hanabi.hanabi_wrapper import HanabiWrapper
+        env_kwargs = default_env_kwargs
+        env = HanabiWrapper(**env_kwargs)
+
+    else:
+        raise NotImplementedError(f"Environment {env_name} not implemented in make_env.")
+    
+    return env
+
+if __name__ == "__main__":
+    # sanity check: test environment creation
+    env = make_env('lbf-reward-shaping', {'num_agents': 3, 'grid_size': 9})
+    print(env)
+    env = make_env('overcooked-v1', {'layout': 'cramped_room'})
+    print(env)
+    env = make_env('hanabi', {'num_agents': 2})
+    print(env)
