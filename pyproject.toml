@@ -1,0 +1,78 @@
+[project]
+name = "bayes-tom"
+dynamic = ['version']
+description = "Official implementation of BayesToM"
+readme = "README.md"
+authors = [
+    { name = "Conor Wallace", email = "conorw8@gmail.com" }
+]
+requires-python = ">=3.10"
+license = "Apache-2.0"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: System :: Distributed Computing",
+]
+keywords = []
+dependencies = [
+    "click>=8.2.1",
+    # JAX AI stack v2025.2.5
+    "jax==0.5.3",
+    "chex==0.1.88",
+    "flax==0.10.2",
+    "ml_dtypes==0.4.0",
+    "optax==0.2.4",
+    "orbax-checkpoint==0.11.1",
+    "orbax-export==0.0.6",
+    # Core dependencies
+    "numpy",
+    "gymnax",
+    "distrax",
+    "safetensors",
+    "moviepy",
+    "ffmpeg",
+    "prettytable",
+    "rliable",
+    "matplotlib",
+    "wandb",
+    "omegaconf",
+    "hydra-core",
+    "huggingface-hub",
+    # Environment dependencies
+    "jumanji==1.1.0",
+    "jaxmarl==0.0.7",
+]
+
+[project.scripts]
+chain = "bayes_tom.cli:main"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bayes_tom"]
+
+[tool.uv]
+cache-keys = [
+  { file = "pyproject.toml" },
+  { git = { commit = true, tags = true } }, # This ensures dynamic version stays in sync
+]
+
+[dependency-groups]
+dev = [
+    "ipython>=8,<10",
+    "pytest-timeout>=2.4.0",
+    "pytest-xdist>=3.7.0",
+    "pytest>=8.3.5",
+    "ruff>=0.14.5",
+]
