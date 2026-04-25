@@ -49,7 +49,7 @@ dependencies = [
 ]
 
 [project.scripts]
-chain = "bayes_tom.cli:main"
+bayes-tom = "bayes_tom.cli:main"
 
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
