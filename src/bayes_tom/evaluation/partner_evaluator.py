@@ -12,28 +12,12 @@ import distrax
 import flax.linen as nn
 from tqdm import tqdm
 
-from prompts import *
-from agents.population_interface import AgentPopulation, NestedAgentPopulation
-from common.agent_loader_from_config import initialize_rl_agent_from_config
-from envs import make_env
-from envs.log_wrapper import LogWrapper
-# Policy Switching Agents (ReCoLLAB, PLASTIC, ...)
-from policy_switching.behavior_model import KNNBehaviorModel
-from policy_switching.llm import ChatClient
-from policy_switching.history import ProbeTrace
-from policy_switching.agents.recollab import ReCoLLABPluseAgent
-from policy_switching.agents.collab import CoLLABPluseAgent
-from policy_switching.agents.liam import LIAMAgent
-from policy_switching.agents.llm_cot import LLMCoTAgent
-from policy_switching.agents.llm_few import LLMFewShotAgent
-from policy_switching.agents.llm_hybrid import BayesToMAgent
-from policy_switching.agents.llm_ip import LLMInversePlanningAgent
-from policy_switching.agents.llm_zero import LLMZeroAgent
-from policy_switching.agents.meliba import MELIBAAgent
-from policy_switching.agents.plastic import PLASTICAgent
-from policy_switching.agents.oracle import OracleAgent
-from policy_switching.agents.random import RandomAgent
-from policy_switching.agents.static import StaticAgent
+from bayes_tom.agents import load_agent
+from bayes_tom.agents.llm import ChatClient
+from bayes_tom.agents.population_interface import AgentPopulation, NestedAgentPopulation
+from bayes_tom.envs import make_env, LogWrapper
+from bayes_tom.utils.agent_loader_from_config import initialize_rl_agent_from_config
+from bayes_tom.utils.history import ProbeTrace
 
 logger = logging.getLogger("Assitant")
 logger.setLevel(logging.ERROR)
