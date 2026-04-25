@@ -1,6 +1,4 @@
-import jax
-
-from agents.population_interface import AgentPopulation
+from bayes_tom.agents.policies.population_interface import AgentPopulation
 
 
 class OracleAgent:

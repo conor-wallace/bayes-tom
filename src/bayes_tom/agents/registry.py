@@ -1,9 +1,9 @@
-from .bayes_tom_agent import BayesTOMAgent
+from .bayes_tom_agent import BayesToMAgent
 from .oracle_agent import OracleAgent
 
 
 __AGENTS_REGISTRY__ = {
-    "bayes_tom": BayesTOMAgent,
+    "bayes_tom": BayesToMAgent,
     "oracle": OracleAgent,
 }
 

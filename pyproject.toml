@@ -46,6 +46,8 @@ dependencies = [
     # Environment dependencies
     "jumanji==1.1.0",
     "jaxmarl==0.0.7",
+    "openai>=2.32.0",
+    "scikit-learn>=1.7.2",
 ]
 
 [project.scripts]

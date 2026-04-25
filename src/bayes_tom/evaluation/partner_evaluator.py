@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from bayes_tom.agents import load_agent
 from bayes_tom.agents.llm import ChatClient
-from bayes_tom.agents.population_interface import AgentPopulation, NestedAgentPopulation
+from bayes_tom.agents.policies.population_interface import AgentPopulation, NestedAgentPopulation
 from bayes_tom.envs import make_env
 from bayes_tom.envs.log_wrapper import LogWrapper
 from bayes_tom.utils.agent_loader_from_config import initialize_rl_agent_from_config
@@ -352,48 +352,50 @@ def create_ego_agent(agent_type, config, ego_population, train_partner_populatio
                      static_idx=0):
     """Factory function to create ego agent based on type"""
     
+    agent_class = load_agent(agent_type)
+
     if agent_type == 'oracle':
-        return OracleAgent(ego_population)
+        return agent_class(ego_population)
     
     elif agent_type == 'static':
-        return StaticAgent(ego_population, static_idx=static_idx)
+        return agent_class(ego_population, static_idx=static_idx)
     
     elif agent_type == 'random':
-        return RandomAgent(ego_population)
+        return agent_class(ego_population)
     
     elif agent_type == 'plastic':
-        return PLASTICAgent(config, ego_population, train_partner_population, train_flattened_partner_params)
+        return agent_class(config, ego_population, train_partner_population, train_flattened_partner_params)
     
     elif agent_type == 'liam':
-        return LIAMAgent(config, env, ego_init_rng)
+        return agent_class(config, env, ego_init_rng)
     
     elif agent_type == 'meliba':
-        return MELIBAAgent(config, env, ego_init_rng)
+        return agent_class(config, env, ego_init_rng)
     
     elif agent_type == 'llm_zero':
         if llm_client is None:
             raise ValueError("LLM client required for LLM agents")
-        return LLMZeroAgent(config=config, ego_population=ego_population, llm=llm_client)
+        return agent_class(config=config, ego_population=ego_population, llm=llm_client)
     
     elif agent_type == 'llm_cot':
         if llm_client is None:
             raise ValueError("LLM client required for LLM agents")
-        return LLMCoTAgent(config=config, ego_population=ego_population, llm=llm_client)
+        return agent_class(config=config, ego_population=ego_population, llm=llm_client)
     
     elif agent_type == 'llm_few':
         if llm_client is None:
             raise ValueError("LLM client required for LLM agents")
-        return LLMFewShotAgent(config=config, ego_population=ego_population, llm=llm_client)
+        return agent_class(config=config, ego_population=ego_population, llm=llm_client)
     
     elif agent_type == 'llm_ip':
         if llm_client is None:
             raise ValueError("LLM client required for LLM agents")
-        return LLMInversePlanningAgent(config=config, ego_population=ego_population, llm=llm_client)
+        return agent_class(config=config, ego_population=ego_population, llm=llm_client)
     
     elif agent_type == 'bayestom':
         if llm_client is None:
             raise ValueError("LLM client required for LLM agents")
-        return BayesToMAgent(
+        return agent_class(
             config=config,
             ego_population=ego_population,
             partner_population=train_partner_population,
@@ -404,19 +406,15 @@ def create_ego_agent(agent_type, config, ego_population, train_partner_populatio
     elif agent_type == 'recollab':
         if llm_client is None:
             raise ValueError("LLM client required for LLM agents")
-        return ReCoLLABPluseAgent(config=config, ego_population=ego_population, llm=llm_client)
+        return agent_class(config=config, ego_population=ego_population, llm=llm_client)
     
     elif agent_type == 'collab':
         if llm_client is None:
             raise ValueError("LLM client required for LLM agents")
-        return CoLLABPluseAgent(config=config, ego_population=ego_population, llm=llm_client)
+        return agent_class(config=config, ego_population=ego_population, llm=llm_client)
     
     else:
         raise ValueError(f"Unknown agent type: {agent_type}")
-
-
-# NOTE: I need to separate out the population generation from partner population to ego population
-# NOTE: The reason is that the partner population might be the test pop, but the ego pop will always reflect the train pop
 
 
 def run_probe_phase(rng, env, ego_agent, ego_params, partner_population, partner_params, partner_idx, episode_idx, max_episode_steps, partner_child_idx=0):    
