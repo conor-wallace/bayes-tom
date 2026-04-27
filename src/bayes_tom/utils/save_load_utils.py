@@ -5,6 +5,7 @@ from flax.training import orbax_utils
 import jax
 import jax.numpy as jnp
 import numpy as np
+import orbax.checkpoint as ocp
 
 # suppress logging from orbax 
 import logging
@@ -34,6 +35,7 @@ def save_train_run(out, savedir, savename):
 def load_checkpoints(path, ckpt_key="checkpoints", custom_loader_cfg: dict=None):
     '''Load checkpoints from orbax checkpoint. 
     Orbax requires absolute paths, so we compute the absolute path to the repo root.'''
+    print(f"Loading checkpoints from {path} with ckpt_key={ckpt_key} and custom_loader_cfg={custom_loader_cfg}")
     restored = load_train_run(path)
     if custom_loader_cfg is None:
         return restored[ckpt_key]
@@ -52,10 +54,21 @@ def load_train_run(path):
     Orbax requires absolute paths, so we compute the absolute path to the repo root.'''
     # determine whether path is relative or absolute
     if not os.path.isabs(path):
+        print(f"Path {path} is relative. Computing absolute path using repo root {REPO_PATH}.")
         path = os.path.join(REPO_PATH, path)
     # load the checkpoint
     checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-    restored = checkpointer.restore(path)
+
+    device = jax.local_devices()[0]
+    sharding = jax.sharding.SingleDeviceSharding(device)
+
+    metadata_tree = checkpointer.metadata(path).tree
+    restore_args = jax.tree_util.tree_map(
+        lambda _: ocp.ArrayRestoreArgs(sharding=sharding),
+        metadata_tree,
+    )
+
+    restored = checkpointer.restore(path, args=ocp.args.PyTreeRestore(restore_args=restore_args),)
     # convert pytree leaves from np arrays to jax arrays
     restored = jax.tree_util.tree_map(
         lambda x: jnp.array(x) if isinstance(x, np.ndarray) else x,

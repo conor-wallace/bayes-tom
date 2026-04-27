@@ -120,11 +120,13 @@ def _is_nested_population(population):
 
 def _discover_iql_child_checkpoints(base_dir: Path, num_parents: int):
     checkpoints = {i: [] for i in range(num_parents)}
-    if not base_dir.exists():
-        logger.warning(f"IQL checkpoint directory not found: {base_dir}")
+    cwd = Path(__file__).resolve().parent
+    ckpt_dir = cwd / base_dir
+    if not ckpt_dir.exists():
+        logger.warning(f"IQL checkpoint directory not found: {ckpt_dir}")
         return checkpoints
 
-    parent_dirs = sorted(base_dir.glob("ego_agent_iql_multiseed_parent_*"))
+    parent_dirs = sorted(ckpt_dir.glob("ego_agent_iql_multiseed_parent_*"))
     for parent_dir in parent_dirs:
         if not parent_dir.is_dir():
             continue
@@ -218,6 +220,7 @@ def _load_nested_iql_population(
         obs_stds = []
         obs_norm_flags = []
         for checkpoint_dir, _seed in children:
+            print(f"Loading checkpoint from {checkpoint_dir}")
             params_path = checkpoint_dir / "actor_params.npy"
             try:
                 params = np.load(params_path, allow_pickle=True).item()
@@ -267,6 +270,7 @@ def _partner_action(partner_population, partner_params, partner_idx_batched, chi
                 obs_mean = partner_population.child_obs_means[parent_i][child_i]
                 obs_std = partner_population.child_obs_stds[parent_i][child_i]
                 if use_norm and obs_mean is not None and obs_std is not None:
+                    print(f"Applying observation normalization for parent {parent_i} child {child_i}")
                     obs_mean = jnp.asarray(obs_mean, dtype=obs.dtype).reshape(1, 1, -1)
                     obs_std = jnp.asarray(obs_std, dtype=obs.dtype).reshape(1, 1, -1)
                     # Exact IQL training-time normalization behavior:
@@ -694,7 +698,7 @@ def evaluate(
     assert num_agents == 2, "This eval code assumes exactly 2 agents."
 
     num_partner_total = partner_population.pop_size
-    partner_child_idx = config.get("task", {}).get("agent_model", {}).get("partner_child_idx", 0)
+    partner_child_idx = config.get("agent_model", {}).get("partner_child_idx", 0)
     results = []
     
     # Optional: collect all timestep data across episodes
@@ -748,7 +752,7 @@ def evaluate(
                 all_timestep_data.append(timestep_info)
             
             # print('Episode length: ', result["episode_length"])
-            # print('Episode return: ', result["returned_episode_returns"][0])
+            print('Episode return: ', result["returned_episode_returns"][0])
             results.append(result)
             pbar.update(1)
 
@@ -780,7 +784,7 @@ def evaluate(
 def learn(config, env, rng, num_episodes, ego_agent, ego_params,
           partner_population, partner_params):
     num_partner_total = partner_population.pop_size
-    partner_child_idx = config.get("task", {}).get("agent_model", {}).get("partner_child_idx", 0)
+    partner_child_idx = config.get("agent_model", {}).get("partner_child_idx", 0)
     results = []
 
     ego_agent.is_learning = True
@@ -959,13 +963,13 @@ def run_partner_evaluation(config, print_metrics=False):
     '''
 
     # Extract parameters from config with defaults
-    agent_type = config.get("task", {}).get("agent_model", {}).get("agent_type", "bayestom")
-    mode = config.get("task", {}).get("agent_model", {}).get("mode", "evaluate")
-    static_idx = config.get("task", {}).get("agent_model", {}).get("static_idx", 0)
-    probe_lengths = config.get("task", {}).get("agent_model", {}).get("probe_lengths", [40, 80, 140, 200])
-    alpha_values = config.get("task", {}).get("agent_model", {}).get("alpha_values", [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-    dataset_path = config.get("task", {}).get("agent_model", {}).get("dataset_path", None)
-    dataset_episodes = config.get("task", {}).get("agent_model", {}).get("dataset_episodes", 100)
+    agent_type = config.get("agent_model", {}).get("agent_type", "bayestom")
+    mode = config.get("agent_model", {}).get("mode", "evaluate")
+    static_idx = config.get("agent_model", {}).get("static_idx", 0)
+    probe_lengths = config.get("agent_model", {}).get("probe_lengths", [40, 80, 140, 200])
+    alpha_values = config.get("agent_model", {}).get("alpha_values", [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+    dataset_path = config.get("agent_model", {}).get("dataset_path", None)
+    dataset_episodes = config.get("agent_model", {}).get("dataset_episodes", 100)
     num_eval_episodes = config["NUM_EVAL_EPISODES"]
 
     # Create only one environment instance
@@ -1004,19 +1008,19 @@ def run_partner_evaluation(config, print_metrics=False):
     )
 
     # Optional: replace test partner population with nested IQL child checkpoints.
-    use_iql_child_partners = config.get("task", {}).get("agent_model", {}).get("use_iql_child_partners", False)
+    use_iql_child_partners = config.get("agent_model", {}).get("use_iql_child_partners", False)
     if use_iql_child_partners:
         action_dim = env.action_space(env.agents[1]).n
         default_iql_dir = Path(__file__).resolve().parents[1] / "checkpoints" / "lbf"
-        test_iql_dir = config.get("task", {}).get("agent_model", {}).get("test_iql_checkpoint_dir", str(default_iql_dir))
-        test_iql_num_parents = int(config.get("task", {}).get("agent_model", {}).get("iql_num_parents", test_pop_size))
+        test_iql_dir = config.get("agent_model", {}).get("test_iql_checkpoint_dir", str(default_iql_dir))
+        test_iql_num_parents = int(config.get("agent_model", {}).get("iql_num_parents", test_pop_size))
 
         nested_test_population = _load_nested_iql_population(
             base_dir=Path(test_iql_dir),
             num_parents=test_iql_num_parents,
             action_dim=action_dim,
-            apply_obs_norm=bool(config.get("task", {}).get("agent_model", {}).get("use_iql_child_obs_norm", True)),
-            norm_clip=float(config.get("task", {}).get("agent_model", {}).get("iql_child_obs_norm_clip", 10.0)),
+            apply_obs_norm=bool(config.get("agent_model", {}).get("use_iql_child_obs_norm", True)),
+            norm_clip=float(config.get("agent_model", {}).get("iql_child_obs_norm_clip", 10.0)),
         )
 
         if nested_test_population is not None:
@@ -1072,6 +1076,7 @@ def run_partner_evaluation(config, print_metrics=False):
         return results
 
     # For 'learn' and 'evaluate' modes
+    print(f"Creating ego agent of type '{agent_type}'...")
     ego_agent = create_ego_agent(
         agent_type, config, ego_population, train_partner_population,
         train_flattened_partner_params, env, ego_init_rng, llm_client, static_idx
@@ -1097,7 +1102,7 @@ def run_partner_evaluation(config, print_metrics=False):
     #     )
 
     # Run evaluation (with optional timestep data collection)
-    collect_timestep_data = config.get("task", {}).get("agent_model", {}).get("collect_timestep_data", False)
+    collect_timestep_data = config.get("agent_model", {}).get("collect_timestep_data", False)
     print(f"Evaluating {agent_type} agent... (collect_timestep_data={collect_timestep_data})")
     
     eval_output = evaluate(

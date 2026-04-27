@@ -23,7 +23,7 @@ test_team_path: checkpoints/lbf/parent_checkpoints/
 ego_agent: # partner config for ppo_ego
   # Only specify ONE partner agent type. Must be RL-based.
   ippo: # Name of the partner agent type. Can be arbitrary.
-    path: checkpoints/lbf/parent_checkpoints/
+    path: ../../checkpoints/lbf/parent_checkpoints/
     actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
     ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -34,7 +34,7 @@ ego_agent: # partner config for ppo_ego
 train_partner_agent: # partner config for ppo_ego
   # Only specify ONE partner agent type. Must be RL-based.
   ippo: # Name of the partner agent type. Can be arbitrary.
-    path: checkpoints/lbf/parent_checkpoints/
+    path: ../../checkpoints/lbf/parent_checkpoints/
     actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
     ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -45,7 +45,7 @@ train_partner_agent: # partner config for ppo_ego
 test_partner_agent: # partner config for ppo_ego
   # Only specify ONE partner agent type. Must be RL-based.
   ippo: # Name of the partner agent type. Can be arbitrary.
-    path: checkpoints/lbf/parent_checkpoints/
+    path: ../../checkpoints/lbf/parent_checkpoints/
     actor_type: actor_with_conditional_critic  # actor_with_conditional_critic # e.g. s5, rnn, mlp
     ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -96,6 +96,7 @@ agent_model:
   collect_timestep_data: true
   use_iql_child_partners: true
   use_iql_child_obs_norm: true
+  test_iql_checkpoint_dir: ../../../checkpoints/lbf
 
 
 liam_agent:
