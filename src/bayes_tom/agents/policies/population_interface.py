@@ -131,6 +131,11 @@ class NestedAgentPopulation:
             if population.policy_cls is not self.policy_cls:
                 raise ValueError("All parent populations must share the same policy_cls for nested selection")
 
+    @property
+    def total_pop_size(self):
+        '''Total number of child agents across all parent populations.'''
+        return sum(self.child_pop_sizes)
+
     def sample_parent_indices(self, n, rng):
         '''Sample n parent indices with replacement.'''
         return jax.random.randint(rng, (n,), 0, self.pop_size)

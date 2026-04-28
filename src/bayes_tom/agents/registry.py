@@ -1,10 +1,14 @@
 from .bayes_tom_agent import BayesToMAgent
 from .oracle_agent import OracleAgent
+from .random_agent import RandomAgent
+from .static_agent import StaticAgent
 
 
 __AGENTS_REGISTRY__ = {
     "bayes_tom": BayesToMAgent,
     "oracle": OracleAgent,
+    "random": RandomAgent,
+    "static": StaticAgent,
 }
 
 

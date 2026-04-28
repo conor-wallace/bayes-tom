@@ -15,38 +15,6 @@ import sys
 import shutil
 from typing import Any, Callable, Dict, NamedTuple, Optional, Sequence, Tuple
 
-# Check if user wants CPU mode (safer for testing)
-USE_CPU = os.environ.get("USE_CPU", "0") == "1"
-
-if USE_CPU:
-    print("Running on CPU (set USE_CPU=0 to use GPU)")
-    os.environ["JAX_PLATFORMS"] = "cpu"
-else:
-    # Disable JAX compilation cache to avoid GPU mismatch errors
-    os.environ["JAX_ENABLE_COMPILATION_CACHE"] = "0"
-    os.environ["JAX_DISABLE_JIT_CACHE"] = "1"
-    # Force single GPU
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-    os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
-
-    # Clear any existing cache
-    cache_dirs = [
-        os.path.expanduser("~/.cache/jax_cache"),
-        "/tmp/jax_cache",
-        "/tmp/__pycache__",
-    ]
-    for cache_dir in cache_dirs:
-        if os.path.exists(cache_dir):
-            try:
-                shutil.rmtree(cache_dir)
-            except Exception:
-                pass
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent / "jax-aht"))
-
 import distrax
 import flax
 import flax.linen as nn
@@ -62,22 +30,8 @@ from flax.training.train_state import TrainState
 from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel
 
-from agents.population_interface import AgentPopulation
-from common.agent_loader_from_config import initialize_rl_agent_from_config
-
-# Print diagnostics
-print(f"\n{'='*60}")
-print("JAX Configuration:")
-print(f"{'='*60}")
-print(f"JAX version: {jax.__version__}")
-print(f"JAX backend: {jax.default_backend()}")
-print(f"JAX devices: {jax.devices()}")
-try:
-    import jaxlib
-    print(f"jaxlib version: {jaxlib.__version__}")
-except Exception:
-    pass
-print(f"{'='*60}\n")
+from bayes_tom.agents.policies.population_interface import AgentPopulation
+from bayes_tom.utils.agent_loader_from_config import initialize_rl_agent_from_config
 
 
 class IQLConfig(BaseModel):
@@ -86,6 +40,7 @@ class IQLConfig(BaseModel):
     project: str = "iql-offline-rl-multiagent"
     seed: int = 42
     env_name: str = "lbf"
+    env_kwargs: Dict[str, Any] = {}
     max_steps: int = 500000
     eval_interval: int = 10000
     num_eval_episodes: int = 5
@@ -115,6 +70,7 @@ class IQLConfig(BaseModel):
     use_multiagent_dataset: bool = True
     dataset_path: str = ""
     agent_type: str = "ego_agent"
+    partner_agent_config: Optional[Dict[str, Any]] = None
     action_dim: int = 6
     state_dim: int = 0
 
@@ -478,7 +434,7 @@ def create_iql_train_states_vectorized(
     )(rngs)
 
 
-def create_multiagent_env(env_name: str, config_dict: dict = None):
+def create_multiagent_env(env_name: str, config: IQLConfig):
     """Create multi-agent environment for evaluation."""
     sys.path.insert(0, str(Path(__file__).parent.parent / "jax-aht"))
     sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -487,7 +443,7 @@ def create_multiagent_env(env_name: str, config_dict: dict = None):
         from envs import make_env
         from envs.log_wrapper import LogWrapper
 
-        env_kwargs = config_dict.get("ENV_KWARGS", {}) if config_dict else {}
+        env_kwargs = config.env_kwargs if hasattr(config, "env_kwargs") else {}
         env = make_env(env_name, env_kwargs)
         env = LogWrapper(env)
         return env
@@ -537,23 +493,22 @@ def evaluate_multiagent_ensemble_vectorized(
         
         # Evaluate this single model using sequential evaluation
         result[model_idx] = evaluate_multiagent_discrete(
-            policy_fn,
-            env,
-            num_episodes,
-            obs_mean,
-            obs_std,
-            agent_id,
-            partner_population,
-            partner_params,
-            partner_idx,
+            agent_policy_fn=policy_fn,
+            env=env,
+            num_episodes=num_episodes,
+            obs_mean=obs_mean,
+            obs_std=obs_std,
+            agent_id=agent_id,
+            partner_population=partner_population,
+            partner_params=partner_params,
+            partner_idx=partner_idx,
         )
-    
+
     return result
 
 
 def evaluate_multiagent_discrete(
     agent_policy_fn: Callable[[jnp.ndarray], jnp.ndarray],
-    other_policy_fn: Callable[[jnp.ndarray], jnp.ndarray],
     env,
     num_episodes: int,
     obs_mean,
@@ -562,10 +517,13 @@ def evaluate_multiagent_discrete(
     partner_population=None,
     partner_params=None,
     partner_idx: int = 0,
+    other_policy_fn: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = None,
 ) -> float:
     """Evaluate discrete policy in multi-agent environment."""
     if env is None:
         return 0.0
+
+    num_episodes = int(num_episodes)
 
     episode_returns = []
     episode_lengths = []
@@ -583,6 +541,7 @@ def evaluate_multiagent_discrete(
             agent_key = f"agent_{agent_id}"
             other_agent_key = f"agent_{1 - agent_id}"
 
+            hstate_partner = None
             if partner_population is not None:
                 other_agent_id = 1 - agent_id
                 hstate_partner = partner_population.policy_cls.init_hstate(
@@ -601,11 +560,40 @@ def evaluate_multiagent_discrete(
                 agent_obs = obs[agent_key]
                 other_obs = obs[other_agent_key]
                 agent_obs_norm = (agent_obs - obs_mean) / (obs_std + 1e-5)
-                other_obs_norm = (other_obs - obs_mean) / (obs_std + 1e-5)
+                print("Getting agent action...")
+                print(f"    Agent obs (raw): {agent_obs}")
+                print(f"    Agent obs (norm): {agent_obs_norm}")
+                print(f"    Agent obs mean: {obs_mean}")
+                print(f"    Agent obs std: {obs_std}")
                 agent_action = int(jnp.squeeze(agent_policy_fn(obs=agent_obs_norm)))
-                other_action = int(jnp.squeeze(other_policy_fn(obs=other_obs_norm)))
+                if partner_population is not None:
+                    print("Getting partner action from population...")
+                    other_action, hstate_partner = partner_population.get_actions(
+                        pop_params=partner_params,
+                        agent_indices=partner_idx_batched,
+                        obs=other_obs.reshape(1, 1, -1),
+                        done=done[other_agent_key].reshape(1, 1),
+                        avail_actions=avail_actions_other,
+                        hstate=hstate_partner,
+                        rng=other_action_rng,
+                        aux_obs=None,
+                        env_state=env_state,
+                        test_mode=True,
+                    )
+                    other_action = int(jnp.squeeze(other_action))
+                elif other_policy_fn is not None:
+                    print("Getting partner action from other_policy_fn...")
+                    other_obs_norm = (other_obs - obs_mean) / (obs_std + 1e-5)
+                    other_action = int(jnp.squeeze(other_policy_fn(obs=other_obs_norm)))
+                else:
+                    print("Getting partner action randomly...")
+                    valid_actions = jnp.where(avail_actions_other.squeeze() > 0)[0]
+                    if len(valid_actions) > 0:
+                        other_action = int(jax.random.choice(other_action_rng, valid_actions))
+                    else:
+                        other_action = 0
 
-                env_act = {agent_key: agent_action, other_key: other_action}
+                env_act = {agent_key: agent_action, other_agent_key: other_action}
                 next_obs, env_state, reward, done_dict, _ = env.step(step_rng, env_state, env_act)
 
                 obs = next_obs
@@ -631,37 +619,36 @@ def evaluate_multiagent_discrete(
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
-def main(cfg: DictConfig):
-    config_dict = OmegaConf.to_container(cfg, resolve=True)
-    iql_config = config_dict.get("iql", {})
-
+def train_children(config: dict):
     # Build config
     iql_params = {
-        "env_name": config_dict["task"]["ENV_NAME"],
-        "dataset_path": config_dict["task"]["dataset_path"],
-        "agent_type": iql_config.get("agent_type", "ego_agent"),
-        "seed": iql_config.get("seed", 42),
-        "max_steps": iql_config.get("max_steps", 500000),
-        "eval_interval": iql_config.get("eval_interval", 10000),
-        "num_eval_episodes": iql_config.get("eval_episodes", 5),
-        "batch_size": iql_config.get("batch_size", 256),
-        "project": iql_config.get("project", "iql-offline-rl-multiagent"),
-        "normalize_state": iql_config.get("normalize_state", True),
-        "reward_scale": iql_config.get("reward_scale", 1.0),
-        "reward_bias": iql_config.get("reward_bias", 0.0),
-        "hidden_dims": iql_config.get("hidden_dims", [256, 256]),
-        "actor_lr": iql_config.get("actor_lr", 3e-4),
-        "value_lr": iql_config.get("value_lr", 3e-4),
-        "critic_lr": iql_config.get("critic_lr", 3e-4),
-        "layer_norm": iql_config.get("layer_norm", True),
-        "expectile": iql_config.get("expectile", 0.7),
-        "beta": iql_config.get("beta", 3.0),
-        "tau": iql_config.get("tau", 0.005),
-        "discount": iql_config.get("discount", 0.99),
-        "clip_exp_adv": iql_config.get("clip_exp_adv", 100.0),
-        "grad_clip_norm": iql_config.get("grad_clip_norm", 10.0),
-        "num_seeds": iql_config.get("num_seeds", 1),
-        "base_seed": iql_config.get("base_seed", iql_config.get("seed", 42)),
+        "env_name": config["task"]["ENV_NAME"],
+        "env_kwargs": config["task"].get("ENV_KWARGS", {}),
+        "dataset_path": config["task"]["dataset_path"],
+        "agent_type": config.get("agent_type", "ego_agent"),
+        "partner_agent_config": config["heldout_set"]["lbf"]["ippo"],
+        "seed": config.get("seed", 42),
+        "max_steps": config.get("max_steps", 500000),
+        "eval_interval": config.get("eval_interval", 10000),
+        "num_eval_episodes": config.get("eval_episodes", 5),
+        "batch_size": config.get("batch_size", 256),
+        "project": config.get("project", "iql-offline-rl-multiagent"),
+        "normalize_state": config.get("normalize_state", True),
+        "reward_scale": config.get("reward_scale", 1.0),
+        "reward_bias": config.get("reward_bias", 0.0),
+        "hidden_dims": config.get("hidden_dims", [256, 256]),
+        "actor_lr": config.get("actor_lr", 3e-4),
+        "value_lr": config.get("value_lr", 3e-4),
+        "critic_lr": config.get("critic_lr", 3e-4),
+        "layer_norm": config.get("layer_norm", True),
+        "expectile": config.get("expectile", 0.7),
+        "beta": config.get("beta", 3.0),
+        "tau": config.get("tau", 0.005),
+        "discount": config.get("discount", 0.99),
+        "clip_exp_adv": config.get("clip_exp_adv", 100.0),
+        "grad_clip_norm": config.get("grad_clip_norm", 10.0),
+        "num_seeds": config.get("num_seeds", 1),
+        "base_seed": config.get("base_seed", config.get("seed", 42)),
     }
 
     config = IQLConfig(**iql_params)
@@ -671,7 +658,6 @@ def main(cfg: DictConfig):
     print("=" * 60)
     print("Training IQL on Multi-Agent Discrete Action Dataset")
     print("=" * 60)
-    print(f"Task: {config_dict['task']['TASK_NAME']}")
     print(f"Dataset path: {config.dataset_path}")
     print(f"Agent type: {config.agent_type}")
     print(f"Environment: {config.env_name}")
@@ -680,7 +666,7 @@ def main(cfg: DictConfig):
         print(f"Seeds: {base_seed} to {base_seed + num_models - 1}")
     print("=" * 60)
 
-    wandb.init(project=config.project, config=OmegaConf.to_container(cfg, resolve=True))
+    wandb.init(project=config.project, config=config)
 
     rng = jax.random.PRNGKey(config.seed)
     dataset, obs_mean, obs_std = get_multiagent_dataset(config)
@@ -710,13 +696,14 @@ def main(cfg: DictConfig):
         try:
             print("\nLoading partner population for evaluation...")
 
-            partner_agent_names = config_dict["task"]["partner_agents"]
-            partner_agent_name = partner_agent_names[0]
-            partner_agent_config = config_dict["heldout_set"][config.env_name][partner_agent_name]
+            partner_agent_name = "agent_0"
+            partner_agent_config = config.partner_agent_config
+
+            print(f"Partner agent config: {type(partner_agent_config)}")
 
             partner_init_rng = jax.random.PRNGKey(config.seed + 100)
 
-            temp_env = create_multiagent_env(config.env_name, config_dict)
+            temp_env = create_multiagent_env(config.env_name, config)
             if temp_env is not None:
                 partner_policy, partner_params, init_partner_params, _ = initialize_rl_agent_from_config(
                     agent_config=partner_agent_config,
@@ -745,7 +732,7 @@ def main(cfg: DictConfig):
     # Create evaluation environment
     eval_env = None
     try:
-        eval_env = create_multiagent_env(config.env_name, config_dict)
+        eval_env = create_multiagent_env(config.env_name, config)
         if eval_env is not None:
             print("✓ Evaluation environment created successfully")
     except Exception as e:

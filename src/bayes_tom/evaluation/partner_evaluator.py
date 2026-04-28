@@ -211,7 +211,7 @@ def _load_nested_iql_population(
         return True
 
     for parent_id in sorted(child_checkpoints.keys()):
-        print(f"Discovered child checkpoints for parent {parent_id}: {len(child_checkpoints[parent_id])} seeds")
+        # print(f"Discovered child checkpoints for parent {parent_id}: {len(child_checkpoints[parent_id])} seeds")
         children = child_checkpoints[parent_id]
         if not children:
             continue
@@ -220,7 +220,7 @@ def _load_nested_iql_population(
         obs_stds = []
         obs_norm_flags = []
         for checkpoint_dir, _seed in children:
-            print(f"Loading checkpoint from {checkpoint_dir}")
+            # print(f"Loading checkpoint from {checkpoint_dir}")
             params_path = checkpoint_dir / "actor_params.npy"
             try:
                 params = np.load(params_path, allow_pickle=True).item()
@@ -239,6 +239,7 @@ def _load_nested_iql_population(
         parent_obs_means.append(obs_means)
         parent_obs_stds.append(obs_stds)
         parent_obs_norm_enabled.append(obs_norm_flags)
+        # print(f"Parent_{parent_id} obs_mean: {obs_means[-1]}")
 
     if not parent_populations:
         return None
@@ -270,13 +271,18 @@ def _partner_action(partner_population, partner_params, partner_idx_batched, chi
                 obs_mean = partner_population.child_obs_means[parent_i][child_i]
                 obs_std = partner_population.child_obs_stds[parent_i][child_i]
                 if use_norm and obs_mean is not None and obs_std is not None:
-                    print(f"Applying observation normalization for parent {parent_i} child {child_i}")
-                    obs_mean = jnp.asarray(obs_mean, dtype=obs.dtype).reshape(1, 1, -1)
-                    obs_std = jnp.asarray(obs_std, dtype=obs.dtype).reshape(1, 1, -1)
+                    # print(f"Applying observation normalization for parent {parent_i} child {child_i}")
+                    obs_mean = jnp.asarray(obs_mean, dtype=jnp.float32).reshape(1, 1, -1)
+                    obs_std = jnp.asarray(obs_std, dtype=jnp.float32).reshape(1, 1, -1)
                     # Exact IQL training-time normalization behavior:
                     # observations = (observations - obs_mean) / obs_std
                     # where obs_std already includes +1e-5 from dataset preprocessing.
+                    # print(f"    Agent obs (raw): {obs}")
                     obs = (obs - obs_mean) / obs_std
+                    # print(f"    Agent obs (norm): {obs}")
+                    # print(f"    Agent obs mean: {obs_mean}")
+                    # print(f"    Agent obs std: {obs_std}")
+
         except Exception:
             # If stats are missing or malformed, fall back to raw observation.
             pass
@@ -527,6 +533,9 @@ def run_single_episode(rng, env, ego_agent, ego_params, partner_population, part
     joint_act_onehot = jnp.concatenate((act_onehot["agent_0"].reshape(1, 1, -1),
                                              act_onehot["agent_1"].reshape(1, 1, -1)), axis=-1)
 
+    print(f"Starting agent obs: {obs['agent_0']}")
+    print(f"Starting partner obs: {obs['agent_1']}")
+
     trace = ProbeTrace()
 
     # Initialize hidden states. Agent id is passed as part of the hstate initialization to support heuristic agents.
@@ -726,7 +735,6 @@ def evaluate(
                 partner_idx_batched,  # Pass as array instead of scalar
                 max_episode_steps=config["ROLLOUT_LENGTH"],
                 partner_child_idx=partner_child_idx,
-                # max_episode_steps=config["agent_model"]["probe_steps"]+1
             )
             result["episode_idx"] = episode_idx
             result["partner_idx"] = partner_idx

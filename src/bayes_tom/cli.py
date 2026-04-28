@@ -33,3 +33,18 @@ def evaluate(config):
     config_dict = _load_config(config_path)
 
     run_partner_evaluation(config_dict)
+
+
+@main.command()
+@click.argument("config")
+def train_children(config):
+    """
+    Train children models
+    """
+    from bayes_tom.teammate_generation.train_children import train_children
+
+    config_path = Path(config)
+
+    config_dict = _load_config(config_path)
+
+    train_children(config_dict)
