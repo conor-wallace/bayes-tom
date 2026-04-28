@@ -712,6 +712,7 @@ def evaluate(
     
     # Optional: collect all timestep data across episodes
     all_timestep_data = [] if collect_timestep_data else None
+    base_rng = jax.random.PRNGKey(config["EVAL_SEED"])
 
     ego_agent.is_learning = False
 
@@ -721,14 +722,15 @@ def evaluate(
     )
     for partner_idx in range(num_partner_total):
         # Create a partner-specific RNG from the base RNG
-        rng, partner_rng = jax.random.split(rng)
+        # rng, partner_rng = jax.random.split(rng)
         for episode_idx in range(num_episodes):
             # Wrap scalar in batch dimension for vmap compatibility
             print("Evaluating with Partner ", partner_idx)
             ego_agent.reset()
             partner_idx_batched = jnp.array([partner_idx])
             # Split RNG for each episode to ensure different random seeds
-            partner_rng, episode_rng = jax.random.split(partner_rng)
+            # partner_rng, episode_rng = jax.random.split(partner_rng)
+            episode_rng = jax.random.fold_in(base_rng, episode_idx)
             result, trace = run_single_episode(
                 episode_rng, env, ego_agent, ego_params, 
                 partner_population, partner_params, 

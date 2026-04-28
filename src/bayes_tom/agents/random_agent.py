@@ -24,7 +24,6 @@ class RandomAgent:
                    aux_obs=None, env_state=None, test_mode=False, trace=None):
 
         random_policy_idx = random.randint(0, self.population.pop_size-1)
-        print(f"RandomAgent selected policy index: {random_policy_idx}")
         random_policy_idx = jnp.array([random_policy_idx])
 
         self.pred_partner_idx = random_policy_idx
