@@ -13,6 +13,7 @@ import flax.linen as nn
 from tqdm import tqdm
 
 from bayes_tom.agents import load_agent
+from bayes_tom.agents.behavior_model import KNNBehaviorModel
 from bayes_tom.agents.llm import ChatClient
 from bayes_tom.agents.policies.population_interface import AgentPopulation, NestedAgentPopulation
 from bayes_tom.envs import make_env
@@ -320,7 +321,7 @@ def parse_args():
     # Agent selection
     parser.add_argument('--agent', type=str, required=True,
                         choices=['oracle', 'static', 'random', 'plastic', 'liam', 'meliba',
-                                'llm_zero', 'llm_cot', 'llm_few', 'llm_ip', 'bayestom',
+                                'llm_zero', 'llm_cot', 'llm_few', 'llm_ip', 'bayes_tom',
                                 'recollab', 'collab'],
                         help='Type of ego agent to use')
     
@@ -403,7 +404,7 @@ def create_ego_agent(agent_type, config, ego_population, train_partner_populatio
             raise ValueError("LLM client required for LLM agents")
         return agent_class(config=config, ego_population=ego_population, llm=llm_client)
     
-    elif agent_type == 'bayestom':
+    elif agent_type == 'bayes_tom':
         if llm_client is None:
             raise ValueError("LLM client required for LLM agents")
         return agent_class(
@@ -436,6 +437,9 @@ def run_probe_phase(rng, env, ego_agent, ego_params, partner_population, partner
     reward = {k: jnp.zeros((1)) for i, k in enumerate(env.agents)}
     joint_act_onehot = jnp.concatenate((act_onehot["agent_0"].reshape(1, 1, -1),
                                              act_onehot["agent_1"].reshape(1, 1, -1)), axis=-1)
+
+    print(f"Starting agent obs: {obs['agent_0']}")
+    print(f"Starting partner obs: {obs['agent_1']}")
 
     trace = ProbeTrace(episode_idx=episode_idx, probe_length=max_episode_steps)
 
@@ -1008,7 +1012,7 @@ def run_partner_evaluation(config, print_metrics=False):
     '''Run partner evaluation
     
     Config parameters:
-        task.agent_model.agent_type: Agent type (oracle, static, random, plastic, liam, meliba, llm_*, bayestom, recollab, collab)
+        task.agent_model.agent_type: Agent type (oracle, static, random, plastic, liam, meliba, llm_*, bayes_tom, recollab, collab)
         task.agent_model.mode: Mode (evaluate, probe, learn, dataset, sweep_alpha)
         task.agent_model.static_idx: Static policy index (for static agent)
         task.agent_model.probe_lengths: List of probe lengths (for probe mode)
@@ -1017,7 +1021,7 @@ def run_partner_evaluation(config, print_metrics=False):
     '''
 
     # Extract parameters from config with defaults
-    agent_type = config.get("agent_model", {}).get("agent_type", "bayestom")
+    agent_type = config.get("agent_model", {}).get("agent_type", "bayes_tom")
     mode = config.get("agent_model", {}).get("mode", "evaluate")
     static_idx = config.get("agent_model", {}).get("static_idx", 0)
     probe_lengths = config.get("agent_model", {}).get("probe_lengths", [40, 80, 140, 200])
@@ -1108,7 +1112,7 @@ def run_partner_evaluation(config, print_metrics=False):
     # )
 
     # Create LLM client if needed
-    llm_agents = ['llm_zero', 'llm_cot', 'llm_few', 'llm_ip', 'bayestom', 'recollab', 'collab']
+    llm_agents = ['llm_zero', 'llm_cot', 'llm_few', 'llm_ip', 'bayes_tom', 'recollab', 'collab']
     llm_client = None
     if agent_type in llm_agents:
         llm_client = ChatClient(
@@ -1153,14 +1157,14 @@ def run_partner_evaluation(config, print_metrics=False):
         )
         return None
     
-    # elif hasattr(ego_agent, "learn") and mode == 'evaluate':
-    #     # Optionally run learning before evaluation
-    #     print("Learning from prior experience...")
-    #     learn(
-    #         config, env, eval_rng, num_eval_episodes, 
-    #         ego_agent, flattened_ego_params, 
-    #         train_partner_population, train_flattened_partner_params
-    #     )
+    elif hasattr(ego_agent, "learn") and mode == 'evaluate':
+        # Optionally run learning before evaluation
+        print("Learning from prior experience...")
+        learn(
+            config, env, eval_rng, num_eval_episodes, 
+            ego_agent, flattened_ego_params, 
+            train_partner_population, train_flattened_partner_params
+        )
 
     # Run evaluation (with optional timestep data collection)
     collect_timestep_data = config.get("agent_model", {}).get("collect_timestep_data", False)
