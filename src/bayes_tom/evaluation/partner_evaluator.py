@@ -299,6 +299,7 @@ def _partner_action(partner_population, partner_params, partner_idx_batched, chi
             env_state=env_state,
             test_mode=True,
         )
+    # print(f"Returning action for partner_idx {partner_idx_batched[0]}")
     return partner_population.get_actions(
         pop_params=partner_params,
         agent_indices=partner_idx_batched,
@@ -358,7 +359,7 @@ def parse_args():
 
 
 def create_ego_agent(agent_type, config, ego_population, train_partner_population, 
-                     train_flattened_partner_params, env, ego_init_rng, llm_client=None, 
+                     env, ego_init_rng, llm_client=None, 
                      static_idx=0):
     """Factory function to create ego agent based on type"""
     
@@ -374,7 +375,7 @@ def create_ego_agent(agent_type, config, ego_population, train_partner_populatio
         return agent_class(ego_population)
     
     elif agent_type == 'plastic':
-        return agent_class(config, ego_population, train_partner_population, train_flattened_partner_params)
+        return agent_class(config, ego_population, train_partner_population)
     
     elif agent_type == 'liam':
         return agent_class(config, env, ego_init_rng)
@@ -409,7 +410,6 @@ def create_ego_agent(agent_type, config, ego_population, train_partner_populatio
             config=config,
             ego_population=ego_population,
             partner_population=train_partner_population,
-            partner_params=train_flattened_partner_params,
             llm=llm_client
         )
     
@@ -523,7 +523,7 @@ def run_probe_phase(rng, env, ego_agent, ego_params, partner_population, partner
     return next_info, trace
 
 
-def run_single_episode(rng, env, ego_agent, ego_params, partner_population, partner_params, partner_idx, max_episode_steps, partner_child_idx=0):    
+def run_single_episode(rng, env, ego_agent, partner_population, partner_idx, max_episode_steps, partner_child_idx=0):    
     # Reset the env.
     rng, reset_rng = jax.random.split(rng)
     obs, env_state = env.reset(reset_rng)
@@ -533,14 +533,14 @@ def run_single_episode(rng, env, ego_agent, ego_params, partner_population, part
     joint_act_onehot = jnp.concatenate((act_onehot["agent_0"].reshape(1, 1, -1),
                                              act_onehot["agent_1"].reshape(1, 1, -1)), axis=-1)
 
-    print(f"Starting agent obs: {obs['agent_0']}")
-    print(f"Starting partner obs: {obs['agent_1']}")
+    # print(f"Starting agent obs: {obs['agent_0']}")
+    # print(f"Starting partner obs: {obs['agent_1']}")
 
     trace = ProbeTrace()
 
     # Initialize hidden states. Agent id is passed as part of the hstate initialization to support heuristic agents.
     hstate_0 = ego_agent.init_hstate(1, aux_info={"agent_id": 0})
-    hstate_1 = _init_partner_hstate(partner_population, int(partner_idx[0]), partner_child_idx)
+    hstate_1 = partner_population.init_hstate(1, aux_info={"agent_id": 1})
     partner_child_idx_batched = jnp.array([partner_child_idx])
 
     t = 0
@@ -569,7 +569,6 @@ def run_single_episode(rng, env, ego_agent, ego_params, partner_population, part
 
         # Get ego action
         act_0, hstate_0 = ego_agent.get_action(
-            params=ego_params,
             partner_indices=partner_idx,
             obs=obs["agent_0"].reshape(1, 1, -1),
             done=done["agent_0"].reshape(1, 1),
@@ -583,18 +582,29 @@ def run_single_episode(rng, env, ego_agent, ego_params, partner_population, part
         act_0 = act_0.squeeze()
 
         # Get partner action using the underlying policy class's get_action method directly
-        act_1, hstate_1 = _partner_action(
-            partner_population=partner_population,
-            partner_params=partner_params,
-            partner_idx_batched=partner_idx,
-            child_idx_batched=partner_child_idx_batched,
+        act_1, hstate_1 = partner_population.get_actions(
+            agent_indices=partner_idx,
             obs=obs["agent_1"].reshape(1, 1, -1),
             done=done["agent_1"].reshape(1, 1),
             avail_actions=avail_actions_1,
             hstate=hstate_1,
             rng=act1_rng,
+            aux_obs=None,
             env_state=env_state,
         )
+
+        # act_1, hstate_1 = _partner_action(
+        #     partner_population=partner_population,
+        #     partner_params=partner_params,
+        #     partner_idx_batched=partner_idx,
+        #     child_idx_batched=partner_child_idx_batched,
+        #     obs=obs["agent_1"].reshape(1, 1, -1),
+        #     done=done["agent_1"].reshape(1, 1),
+        #     avail_actions=avail_actions_1,
+        #     hstate=hstate_1,
+        #     rng=act1_rng,
+        #     env_state=env_state,
+        # )
         act_1 = act_1.squeeze()
 
         # print("Partner obs: ", obs["agent_1"])
@@ -693,9 +703,7 @@ def evaluate(
     rng,
     num_episodes,
     ego_agent,
-    ego_params,
     partner_population,
-    partner_params,
     collect_timestep_data=False
 ):
     '''Evaluate ego policy switching vs partner population
@@ -732,8 +740,8 @@ def evaluate(
             # partner_rng, episode_rng = jax.random.split(partner_rng)
             episode_rng = jax.random.fold_in(base_rng, episode_idx)
             result, trace = run_single_episode(
-                episode_rng, env, ego_agent, ego_params, 
-                partner_population, partner_params, 
+                episode_rng, env, ego_agent, 
+                partner_population, 
                 partner_idx_batched,  # Pass as array instead of scalar
                 max_episode_steps=config["ROLLOUT_LENGTH"],
                 partner_child_idx=partner_child_idx,
@@ -960,6 +968,42 @@ def sweep_alpha(config, env, rng, num_episodes, ego_population, ego_params,
     return all_results
 
 
+def load_single_agent_population(agent_config, env, agent_init_rng):
+    agent_name = list(agent_config.keys())[0]
+    agent_config_params = list(agent_config.values())[0]
+    policy_cls, params, init_params, idx_labels = initialize_rl_agent_from_config(
+        agent_config_params,
+        agent_name,
+        env,
+        agent_init_rng
+    )
+    flattened_params = jax.tree.map(lambda x, y: x.reshape((-1,) + y.shape), params, init_params)
+    pop_size = jax.tree.leaves(flattened_params)[0].shape[0]
+
+    return AgentPopulation(pop_size=pop_size, policy_cls=policy_cls, params=flattened_params)
+
+def load_nested_population(agent_config, env, agent_init_rng):
+    sub_population_keys = agent_config.get("population_keys", [])
+    sub_populations = []
+    for key in sub_population_keys:
+        sub_config = agent_config.get(key, {})
+        sub_population = load_single_agent_population(sub_config, env, agent_init_rng)
+        sub_populations.append(sub_population)
+    return NestedAgentPopulation(populations=sub_populations)
+
+
+def load_population(agent_config, env, agent_init_rng):
+    population_type = agent_config.get("type", "single")
+
+    if population_type == "single":
+        del agent_config["type"]  # Remove type key before loading single agent population
+        return load_single_agent_population(agent_config, env, agent_init_rng)
+    elif population_type == "nested":
+        return load_nested_population(agent_config, env, agent_init_rng)
+    else:
+        raise ValueError(f"Unknown population type: {population_type}")
+
+
 def run_partner_evaluation(config, print_metrics=False):
     '''Run partner evaluation
     
@@ -987,74 +1031,81 @@ def run_partner_evaluation(config, print_metrics=False):
     env = LogWrapper(env)
     
     rng = jax.random.PRNGKey(config["EVAL_SEED"])
-    rng, ego_init_rng, partner_init_rng, eval_rng = jax.random.split(rng, 4)
+    rng, agent_init_rng, eval_rng = jax.random.split(rng, 3)
 
     # Load train/test partner populations
     train_partner_agent_config = dict(config["train_partner_agent"])
     test_partner_agent_config = dict(config["test_partner_agent"])
-    
-    train_partner_name = list(train_partner_agent_config.keys())[0]
-    test_partner_name = list(test_partner_agent_config.keys())[0]
-    train_partner_agent_config = list(train_partner_agent_config.values())[0]
-    test_partner_agent_config = list(test_partner_agent_config.values())[0]
-
-    train_partner_policy, train_partner_params, init_train_partner_params, idx_labels = initialize_rl_agent_from_config(
-        train_partner_agent_config, train_partner_name, env, partner_init_rng)
-    test_partner_policy, test_partner_params, init_test_partner_params, idx_labels = initialize_rl_agent_from_config(
-        test_partner_agent_config, test_partner_name, env, partner_init_rng)
-
-    train_flattened_partner_params = jax.tree.map(lambda x, y: x.reshape((-1,) + y.shape), train_partner_params, init_train_partner_params)
-    test_flattened_partner_params = jax.tree.map(lambda x, y: x.reshape((-1,) + y.shape), test_partner_params, init_test_partner_params)
-    train_pop_size = jax.tree.leaves(train_flattened_partner_params)[0].shape[0]
-    test_pop_size = jax.tree.leaves(test_flattened_partner_params)[0].shape[0]
-
-    train_partner_population = AgentPopulation(
-        pop_size=train_pop_size,
-        policy_cls=train_partner_policy
-    )
-    test_partner_population = AgentPopulation(
-        pop_size=test_pop_size,
-        policy_cls=test_partner_policy
-    )
-
-    # Optional: replace test partner population with nested IQL child checkpoints.
-    use_iql_child_partners = config.get("agent_model", {}).get("use_iql_child_partners", False)
-    if use_iql_child_partners:
-        action_dim = env.action_space(env.agents[1]).n
-        default_iql_dir = Path(__file__).resolve().parents[1] / "checkpoints" / "lbf"
-        test_iql_dir = config.get("agent_model", {}).get("test_iql_checkpoint_dir", str(default_iql_dir))
-        test_iql_num_parents = int(config.get("agent_model", {}).get("iql_num_parents", test_pop_size))
-
-        nested_test_population = _load_nested_iql_population(
-            base_dir=Path(test_iql_dir),
-            num_parents=test_iql_num_parents,
-            action_dim=action_dim,
-            apply_obs_norm=bool(config.get("agent_model", {}).get("use_iql_child_obs_norm", True)),
-            norm_clip=float(config.get("agent_model", {}).get("iql_child_obs_norm_clip", 10.0)),
-        )
-
-        if nested_test_population is not None:
-            test_partner_population = nested_test_population
-            test_flattened_partner_params = None
-            print(f"Using nested IQL test partners from {test_iql_dir} (parents={test_partner_population.pop_size})")
-        else:
-            print("Warning: requested nested IQL test partners, but none were loaded. Falling back to default test partner population.")
-
-    # Load best-response population
     ego_agent_config = dict(config["ego_agent"])
+
+    train_partner_population = load_population(train_partner_agent_config, env, agent_init_rng)
+    test_partner_population = load_population(test_partner_agent_config, env, agent_init_rng)
+    ego_population = load_population(ego_agent_config, env, agent_init_rng)
+
+    # exit()
     
-    ego0_name = list(ego_agent_config.keys())[0]
-    ego0_agent_config = list(ego_agent_config.values())[0]
-    ego_policy, ego_params, init_ego_params, idx_labels = initialize_rl_agent_from_config(
-        ego0_agent_config, ego0_name, env, ego_init_rng)
+    # train_partner_name = list(train_partner_agent_config.keys())[0]
+    # test_partner_name = list(test_partner_agent_config.keys())[0]
+    # train_partner_agent_config = list(train_partner_agent_config.values())[0]
+    # test_partner_agent_config = list(test_partner_agent_config.values())[0]
 
-    flattened_ego_params = jax.tree.map(lambda x, y: x.reshape((-1,) + y.shape), ego_params, init_ego_params)
-    pop_size = jax.tree.leaves(flattened_ego_params)[0].shape[0]
+    # train_partner_policy, train_partner_params, init_train_partner_params, idx_labels = initialize_rl_agent_from_config(
+    #     train_partner_agent_config, train_partner_name, env, partner_init_rng)
+    # test_partner_policy, test_partner_params, init_test_partner_params, idx_labels = initialize_rl_agent_from_config(
+    #     test_partner_agent_config, test_partner_name, env, partner_init_rng)
 
-    ego_population = AgentPopulation(
-        pop_size=pop_size,
-        policy_cls=ego_policy
-    )
+    # train_flattened_partner_params = jax.tree.map(lambda x, y: x.reshape((-1,) + y.shape), train_partner_params, init_train_partner_params)
+    # test_flattened_partner_params = jax.tree.map(lambda x, y: x.reshape((-1,) + y.shape), test_partner_params, init_test_partner_params)
+    # train_pop_size = jax.tree.leaves(train_flattened_partner_params)[0].shape[0]
+    # test_pop_size = jax.tree.leaves(test_flattened_partner_params)[0].shape[0]
+
+    # train_partner_population = AgentPopulation(
+    #     pop_size=train_pop_size,
+    #     policy_cls=train_partner_policy
+    # )
+    # test_partner_population = AgentPopulation(
+    #     pop_size=test_pop_size,
+    #     policy_cls=test_partner_policy
+    # )
+
+    # # Optional: replace test partner population with nested IQL child checkpoints.
+    # use_iql_child_partners = config.get("agent_model", {}).get("use_iql_child_partners", False)
+    # if use_iql_child_partners:
+    #     action_dim = env.action_space(env.agents[1]).n
+    #     default_iql_dir = Path(__file__).resolve().parents[1] / "checkpoints" / "lbf"
+    #     test_iql_dir = config.get("agent_model", {}).get("test_iql_checkpoint_dir", str(default_iql_dir))
+    #     test_iql_num_parents = int(config.get("agent_model", {}).get("iql_num_parents", test_pop_size))
+
+    #     nested_test_population = _load_nested_iql_population(
+    #         base_dir=Path(test_iql_dir),
+    #         num_parents=test_iql_num_parents,
+    #         action_dim=action_dim,
+    #         apply_obs_norm=bool(config.get("agent_model", {}).get("use_iql_child_obs_norm", True)),
+    #         norm_clip=float(config.get("agent_model", {}).get("iql_child_obs_norm_clip", 10.0)),
+    #     )
+
+    #     if nested_test_population is not None:
+    #         test_partner_population = nested_test_population
+    #         test_flattened_partner_params = None
+    #         print(f"Using nested IQL test partners from {test_iql_dir} (parents={test_partner_population.pop_size})")
+    #     else:
+    #         print("Warning: requested nested IQL test partners, but none were loaded. Falling back to default test partner population.")
+
+    # # Load best-response population
+    # ego_agent_config = dict(config["ego_agent"])
+    
+    # ego0_name = list(ego_agent_config.keys())[0]
+    # ego0_agent_config = list(ego_agent_config.values())[0]
+    # ego_policy, ego_params, init_ego_params, idx_labels = initialize_rl_agent_from_config(
+    #     ego0_agent_config, ego0_name, env, ego_init_rng)
+
+    # flattened_ego_params = jax.tree.map(lambda x, y: x.reshape((-1,) + y.shape), ego_params, init_ego_params)
+    # pop_size = jax.tree.leaves(flattened_ego_params)[0].shape[0]
+
+    # ego_population = AgentPopulation(
+    #     pop_size=pop_size,
+    #     policy_cls=ego_policy
+    # )
 
     # Create LLM client if needed
     llm_agents = ['llm_zero', 'llm_cot', 'llm_few', 'llm_ip', 'bayestom', 'recollab', 'collab']
@@ -1089,7 +1140,7 @@ def run_partner_evaluation(config, print_metrics=False):
     print(f"Creating ego agent of type '{agent_type}'...")
     ego_agent = create_ego_agent(
         agent_type, config, ego_population, train_partner_population,
-        train_flattened_partner_params, env, ego_init_rng, llm_client, static_idx
+        env, agent_init_rng, llm_client, static_idx
     )
 
     # Learning phase
@@ -1121,9 +1172,7 @@ def run_partner_evaluation(config, print_metrics=False):
         rng=eval_rng,
         num_episodes=num_eval_episodes,
         ego_agent=ego_agent,
-        ego_params=flattened_ego_params,
         partner_population=test_partner_population,
-        partner_params=test_flattened_partner_params,
         collect_timestep_data=collect_timestep_data
     )
     

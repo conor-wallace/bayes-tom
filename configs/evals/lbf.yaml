@@ -1,7 +1,7 @@
 ENV_NAME: lbf
-EVAL_SEED: 34957
+EVAL_SEED: 112358 # 34957
 ROLLOUT_LENGTH: 128
-NUM_EVAL_EPISODES: 3
+NUM_EVAL_EPISODES: 5
 ENV_KWARGS: {}
 TASK_NAME: lbf
 
@@ -20,37 +20,245 @@ partner_agents:
 train_team_path: checkpoints/lbf/parent_checkpoints/
 test_team_path: checkpoints/lbf/parent_checkpoints/
 
-ego_agent: # partner config for ppo_ego
-  # Only specify ONE partner agent type. Must be RL-based.
-  ippo: # Name of the partner agent type. Can be arbitrary.
-    path: ../../checkpoints/lbf/parent_checkpoints/
-    actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
-    ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
-    idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
-    # POP_SIZE: 4
-    POP_SIZE: 6
 
-# Train partner
-train_partner_agent: # partner config for ppo_ego
-  # Only specify ONE partner agent type. Must be RL-based.
-  ippo: # Name of the partner agent type. Can be arbitrary.
-    path: ../../checkpoints/lbf/parent_checkpoints/
-    actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
-    ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
-    idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
-    # POP_SIZE: 4
-    POP_SIZE: 6
+# train_partner_agent:
+#   type: single
+#   ippo:
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+#     path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+#     actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+#     ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+#     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+#     POP_SIZE: 2
 
-# Test partner
-test_partner_agent: # partner config for ppo_ego
-  # Only specify ONE partner agent type. Must be RL-based.
-  ippo: # Name of the partner agent type. Can be arbitrary.
-    path: ../../checkpoints/lbf/parent_checkpoints/
-    actor_type: actor_with_conditional_critic  # actor_with_conditional_critic # e.g. s5, rnn, mlp
-    ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
-    idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
-    # POP_SIZE: 4
-    POP_SIZE: 6
+
+# test_partner_agent:
+#   type: single
+#   ippo:
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+#     path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+#     actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+#     ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+#     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+#     POP_SIZE: 2
+
+
+# ego_agent:
+#   type: single
+#   ippo:
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+#     path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+#     actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+#     ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
+#     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+#     POP_SIZE: 2
+
+
+train_partner_agent:
+  type: nested
+  population_keys: [nearest_food, farthest_food, central_food]
+  nearest_food:
+    ippo:
+      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+      actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+      ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+      idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+      POP_SIZE: 2
+  
+  farthest_food:
+    ippo:
+      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+      actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+      ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+      idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+      POP_SIZE: 2
+  
+  central_food:
+    ippo:
+      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+      actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+      ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+      idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+      POP_SIZE: 2
+
+
+test_partner_agent:
+  type: nested
+  population_keys: [nearest_food, farthest_food, central_food]
+  nearest_food:
+    ippo:
+      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+      actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+      ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+      idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+      POP_SIZE: 2
+  
+  farthest_food:
+    ippo:
+      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+      actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+      ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+      idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+      POP_SIZE: 2
+  
+  central_food:
+    ippo:
+      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+      actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+      ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+      idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+      POP_SIZE: 2
+
+
+ego_agent:
+  type: nested
+  population_keys: [nearest_food, farthest_food, central_food]
+  nearest_food:
+    ippo:
+      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+      actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+      ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
+      idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+      POP_SIZE: 2
+  
+  farthest_food:
+    ippo:
+      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+      actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+      ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
+      idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+      POP_SIZE: 2
+  
+  central_food:
+    ippo:
+      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+      actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+      ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
+      idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+      POP_SIZE: 2
+
+
+# ego_agent: # partner config for ppo_ego
+#   # Only specify ONE partner agent type. Must be RL-based.
+#   ippo: # Name of the partner agent type. Can be arbitrary.
+#     # path: ../../checkpoints/lbf/parent_checkpoints/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2025-12-24_13-25-02/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_08-29-02/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_09-34-17/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_10-48-11/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_22-01-58/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_22-44-19/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-05_09-15-34/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-05_10-52-54/saved_train_run/
+
+#     # BR1: Looks good
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_09-28-08/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+
+#     # BR2: Doesn't achieve any return
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_09-43-23/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_20-27-14/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_21-39-17/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_21-48-56/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+
+#     # BR3: Doesn't achieve any return
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_10-07-14/saved_train_run/
+#     path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+
+#     # BR4: Achieves slightly more than zero return, but not useable
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_10-16-47/saved_train_run/
+
+#     actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+#     ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
+#     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+#     POP_SIZE: 2
+#     # POP_SIZE: 4
+#     # POP_SIZE: 6
+#     # POP_SIZE: 8
+
+# # Train partner
+# train_partner_agent: # partner config for ppo_ego
+#   # Only specify ONE partner agent type. Must be RL-based.
+#   ippo: # Name of the partner agent type. Can be arbitrary.
+#     # path: ../../checkpoints/lbf/parent_checkpoints/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2025-12-24_13-25-02/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_08-29-02/saved_train_run
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_09-34-17/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_10-48-11/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_22-01-58/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_22-44-19/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-05_09-15-34/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-05_10-52-54/saved_train_run/
+
+#     # BR1
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_09-28-08/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+
+#     # BR2
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_09-43-23/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_20-27-14/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_21-39-17/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_21-48-56/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+
+#     # BR3
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_10-07-14/saved_train_run/
+#     path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+
+#     # BR4
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_10-16-47/saved_train_run/
+
+#     actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+#     ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+#     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+#     POP_SIZE: 2
+#     # POP_SIZE: 4
+#     # POP_SIZE: 6
+#     # POP_SIZE: 8
+
+# # Test partner
+# test_partner_agent: # partner config for ppo_ego
+#   # Only specify ONE partner agent type. Must be RL-based.
+#   ippo: # Name of the partner agent type. Can be arbitrary.
+#     # path: ../../checkpoints/lbf/parent_checkpoints/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2025-12-24_13-25-02/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_08-29-02/saved_train_run
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_09-34-17/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_10-48-11/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_22-01-58/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-04-28_22-44-19/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-05_09-15-34/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-05_10-52-54/saved_train_run/
+
+#     # BR1
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_09-28-08/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+
+#     # BR2
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_09-43-23/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_20-27-14/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_21-39-17/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_21-48-56/saved_train_run/
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+
+#     # BR3
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_10-07-14/saved_train_run/
+#     path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+
+#     # BR4
+#     # path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-07_10-16-47/saved_train_run/
+
+#     actor_type: actor_with_conditional_critic  # actor_with_conditional_critic # e.g. s5, rnn, mlp
+#     ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+#     idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+#     POP_SIZE: 2
+#     # POP_SIZE: 4
+#     # POP_SIZE: 6
+#     # POP_SIZE: 8
 
 
 ############ EGO CONFIG ##############
@@ -59,10 +267,10 @@ agent_model:
   # Agent configuration for partner evaluation
   # Uncomment and set these to configure the experiment:
   
-  agent_type: "oracle"  # Options: oracle, static, random, plastic, liam, meliba, 
+  agent_type: "oracle"   # Options: oracle, static, random, plastic, liam, meliba, 
                          #          llm_zero, llm_cot, llm_few, llm_ip, bayestom, recollab, collab
   mode: "evaluate"        # Options: evaluate, probe, learn, dataset, sweep_alpha
-  static_idx: 4           # For static agent only
+  static_idx: 5           # For static agent only
   partner_child_idx: 1
   dataset_partner_idx: 4  # Index of the specific partner to include in the dataset
   dataset_path: offline_data/      # For dataset mode (defaults to results_path/offline_dataset.hdf5)
@@ -94,7 +302,7 @@ agent_model:
   eta: 0.5    # EMA coefficient for updating the likelihoods
   oracle_likelihood: false  # If true, use the true partner action to compute likelihoods instead of the predicted partner action
   collect_timestep_data: true
-  use_iql_child_partners: true
+  use_iql_child_partners: false
   use_iql_child_obs_norm: true
   test_iql_checkpoint_dir: ../../../checkpoints/lbf
 

@@ -1,27 +1,38 @@
+import bisect
 from functools import partial
+from itertools import accumulate
+from typing import Any, Iterable, Sequence
+
 import jax
 import jax.numpy as jnp
-from typing import Any, Iterable, Sequence
+
+
+def _maybe_convert_to_int(x):
+    if isinstance(x, jnp.ndarray):
+        return int(x[0])
+    return x
 
 
 class AgentPopulation:
     '''Base class for a population of homogeneous agents
     TODO: develop more complex population classes that can handle heterogeneous agents
     '''
-    def __init__(self, pop_size, policy_cls):
+    def __init__(self, pop_size, policy_cls, params):
         '''
         Args:
             pop_size: int, number of agents in the population
             policy_cls: an instance of the AgentPolicy class. The policy class for the population of agents
+            params: initial parameters for the population
         '''
         self.pop_size = pop_size
         self.policy_cls = policy_cls # AgentPolicy class
+        self.params = params # pytree of parameters for the population of agents, with shape (pop_size, ...)
 
     def sample_agent_indices(self, n, rng):
         '''Sample n indices from the population, with replacement.'''
         return jax.random.randint(rng, (n,), 0, self.pop_size)
     
-    def gather_agent_params(self, pop_params, agent_indices):
+    def gather_agent_params(self, agent_indices):
         '''Gather the parameters of the agents specified by agent_indices.
 
         Args:
@@ -31,15 +42,14 @@ class AgentPopulation:
         def gather_leaf(leaf):
             # leaf shape: (num_envs,  ...)
             return jax.vmap(lambda idx: leaf[idx])(agent_indices)
-        return jax.tree.map(gather_leaf, pop_params)
+        return jax.tree.map(gather_leaf, self.params)
     
-    def get_actions(self, pop_params, agent_indices, obs, done, avail_actions, hstate, rng, 
+    def get_actions(self, agent_indices, obs, done, avail_actions, hstate, rng, 
                     env_state=None, aux_obs=None, test_mode=False):
         '''
         Get the actions of the agents specified by agent_indices. 
         
         Args:
-            pop_params: pytree of parameters for the population of agents of shape (pop_size, ...).
             agent_indices: indices with shape (num_envs,), each in [0, pop_size)
             obs: observations with shape (num_envs, ...) 
             done: done flags with shape (num_envs,)
@@ -54,7 +64,7 @@ class AgentPopulation:
         '''
         # print("In Get Actions")
         # print("Agent indices: ", agent_indices)
-        gathered_params = self.gather_agent_params(pop_params, agent_indices)
+        gathered_params = self.gather_agent_params(agent_indices)
         agent_indices = jnp.atleast_1d(agent_indices)
         num_envs = agent_indices.shape[0]
         rngs_batched = jax.random.split(rng, num_envs)
@@ -67,13 +77,12 @@ class AgentPopulation:
             rngs_batched)
         return actions, new_hstate
 
-    def get_action_value_policies(self, pop_params, agent_indices, obs, done, avail_actions, hstate, rng, 
+    def get_action_value_policies(self, agent_indices, obs, done, avail_actions, hstate, rng, 
                     env_state=None, aux_obs=None, test_mode=False):
         '''
         Get the actions of the agents specified by agent_indices. 
         
         Args:
-            pop_params: pytree of parameters for the population of agents of shape (pop_size, ...).
             agent_indices: indices with shape (num_envs,), each in [0, pop_size)
             obs: observations with shape (num_envs, ...) 
             done: done flags with shape (num_envs,)
@@ -88,7 +97,7 @@ class AgentPopulation:
         '''
         # print("In Get Action Value Policies")
         # print("Agent indices: ", agent_indices)
-        gathered_params = self.gather_agent_params(pop_params, agent_indices)
+        gathered_params = self.gather_agent_params(agent_indices)
         agent_indices = jnp.atleast_1d(agent_indices)
         num_envs = agent_indices.shape[0]
         rngs_batched = jax.random.split(rng, num_envs)
@@ -115,26 +124,18 @@ class NestedAgentPopulation:
     child agent index is resolved within that selected population.
     '''
 
-    def __init__(self, parent_populations: Sequence[AgentPopulation], parent_params: Sequence[Any]):
-        if len(parent_populations) == 0:
-            raise ValueError("parent_populations must not be empty")
-        if len(parent_populations) != len(parent_params):
-            raise ValueError("parent_populations and parent_params must have the same length")
+    def __init__(self, populations: Sequence[AgentPopulation]):
+        if len(populations) == 0:
+            raise ValueError("populations must not be empty")
 
-        self.parent_populations = list(parent_populations)
-        self.parent_params = list(parent_params)
-        self.pop_size = len(self.parent_populations)
-        self.policy_cls = self.parent_populations[0].policy_cls
-        self.child_pop_sizes = [population.pop_size for population in self.parent_populations]
+        self.populations = list(populations)
+        self.pop_size = sum([pop.pop_size for pop in self.populations])
+        self.sub_pop_sizes = [pop.pop_size for pop in self.populations]
+        self.cumulative_sizes = list(accumulate(self.sub_pop_sizes))
 
-        for population in self.parent_populations[1:]:
-            if population.policy_cls is not self.policy_cls:
-                raise ValueError("All parent populations must share the same policy_cls for nested selection")
-
-    @property
-    def total_pop_size(self):
-        '''Total number of child agents across all parent populations.'''
-        return sum(self.child_pop_sizes)
+    def init_hstate(self, n: int, aux_info: dict=None):
+        '''Initialize the hidden state for n members of the population.'''
+        return self.populations[0].policy_cls.init_hstate(n, aux_info)
 
     def sample_parent_indices(self, n, rng):
         '''Sample n parent indices with replacement.'''
@@ -155,19 +156,13 @@ class NestedAgentPopulation:
 
         return parent_indices, child_indices
 
-    def _normalize_indices(self, parent_indices, agent_indices):
-        parent_indices = jnp.atleast_1d(parent_indices)
-        agent_indices = jnp.atleast_1d(agent_indices)
+    def _normalize_indices(self, agent_idx):
+        agent_idx = _maybe_convert_to_int(agent_idx)
 
-        if parent_indices.shape == (1,) and agent_indices.shape[0] > 1:
-            parent_indices = jnp.repeat(parent_indices, agent_indices.shape[0], axis=0)
-        if agent_indices.shape == (1,) and parent_indices.shape[0] > 1:
-            agent_indices = jnp.repeat(agent_indices, parent_indices.shape[0], axis=0)
+        pop_idx = bisect.bisect_right(self.cumulative_sizes, agent_idx)
+        sub_pop_idx = agent_idx - (self.cumulative_sizes[pop_idx - 1] if pop_idx > 0 else 0)
 
-        if parent_indices.shape != agent_indices.shape:
-            raise ValueError("parent_indices and agent_indices must have matching shapes or be scalar-broadcastable")
-
-        return parent_indices, agent_indices
+        return pop_idx, jnp.array([sub_pop_idx])
 
     def gather_agent_params(self, parent_indices, agent_indices):
         '''Gather parameters for the selected parent/child pairs.'''
@@ -182,27 +177,14 @@ class NestedAgentPopulation:
 
         return jax.tree.map(lambda *xs: jnp.concatenate(xs, axis=0), *gathered_params)
 
-    def get_actions(self, parent_indices, agent_indices, obs, done, avail_actions, hstate, rng,
+    def get_actions(self, agent_indices, obs, done, avail_actions, hstate, rng,
                     env_state=None, aux_obs=None, test_mode=False):
         '''Get actions for the selected parent/child pairs.'''
-        parent_indices, agent_indices = self._normalize_indices(parent_indices, agent_indices)
-        gathered_params = self.gather_agent_params(parent_indices, agent_indices)
+        sub_pop_index, sub_pop_agent_indices = self._normalize_indices(agent_indices)
 
-        num_envs = parent_indices.shape[0]
-        rngs_batched = jax.random.split(rng, num_envs)
-        vmapped_get_action = jax.vmap(partial(self.policy_cls.get_action,
-                                              aux_obs=aux_obs,
-                                              env_state=env_state,
-                                              test_mode=test_mode))
-        actions, new_hstate = vmapped_get_action(
-            gathered_params,
-            obs,
-            done,
-            avail_actions,
-            hstate,
-            rngs_batched,
+        return self.populations[sub_pop_index].get_actions(
+            sub_pop_agent_indices, obs, done, avail_actions, hstate, rng, env_state, aux_obs, test_mode
         )
-        return actions, new_hstate
 
     def get_action_value_policies(self, parent_indices, agent_indices, obs, done, avail_actions, hstate, rng,
                     env_state=None, aux_obs=None, test_mode=False):
@@ -226,6 +208,6 @@ class NestedAgentPopulation:
         )
         return actions, values, probs, new_hstate
 
-    def init_hstate(self, n: int, aux_info: dict=None):
-        '''Initialize hidden state for n members of the nested population.'''
-        return self.policy_cls.init_hstate(n, aux_info)
+    # def init_hstate(self, n: int, aux_info: dict=None):
+    #     '''Initialize hidden state for n members of the nested population.'''
+    #     return self.policy_cls.init_hstate(n, aux_info)

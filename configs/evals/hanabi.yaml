@@ -1,0 +1,157 @@
+ENV_NAME: hanabi
+EVAL_SEED: 34957
+ROLLOUT_LENGTH: 128
+NUM_EVAL_EPISODES: 3
+ENV_KWARGS: {}
+TASK_NAME: hanabi
+
+results_path: evaluation_results/
+
+# Dataset path for offline RL
+dataset_path: offline_data/offline_dataset_partner_0.hdf5
+
+# Partner agents list for loading populations
+partner_agents:
+  - ippo
+
+############ TEAM CONFIG ############
+
+# train team
+train_team_path: checkpoints/hanabi/parent_checkpoints/lbrdiv/
+test_team_path: checkpoints/hanabi/parent_checkpoints/lbrdiv/
+
+ego_agent: # partner config for ppo_ego
+  # Only specify ONE partner agent type. Must be RL-based.
+  ippo: # Name of the partner agent type. Can be arbitrary.
+    path: ../../checkpoints/hanabi/parent_checkpoints/lbrdiv/
+    actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+    ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
+    idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+    POP_SIZE: 6
+
+# Train partner
+train_partner_agent: # partner config for ppo_ego
+  # Only specify ONE partner agent type. Must be RL-based.
+  ippo: # Name of the partner agent type. Can be arbitrary.
+    path: ../../checkpoints/hanabi/parent_checkpoints/lbrdiv/
+    actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
+    ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+    idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+    POP_SIZE: 6
+
+# Test partner
+test_partner_agent: # partner config for ppo_ego
+  # Only specify ONE partner agent type. Must be RL-based.
+  ippo: # Name of the partner agent type. Can be arbitrary.
+    path: ../../checkpoints/hanabi/parent_checkpoints/lbrdiv/
+    actor_type: actor_with_conditional_critic  # actor_with_conditional_critic # e.g. s5, rnn, mlp
+    ckpt_key: final_params_br # Key to load from the checkpoint pytree.
+    idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+    POP_SIZE: 6
+
+
+############ EGO CONFIG ##############
+
+agent_model:
+  # Agent configuration for partner evaluation
+  # Uncomment and set these to configure the experiment:
+  
+  agent_type: "random"  # Options: oracle, static, random, plastic, liam, meliba, 
+                         #          llm_zero, llm_cot, llm_few, llm_ip, bayestom, recollab, collab
+  mode: "evaluate"        # Options: evaluate, probe, learn, dataset, sweep_alpha
+  static_idx: 4           # For static agent only
+  partner_child_idx: 5
+  dataset_partner_idx: 4  # Index of the specific partner to include in the dataset
+  dataset_path: offline_data/      # For dataset mode (defaults to results_path/offline_dataset.hdf5)
+  dataset_episodes: 4000
+  # probe_lengths: [2, 5, 8, 12]  # For probe mode (LBF-specific lengths)
+  # alpha_values: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]  # For sweep_alpha mode (BayesToM)
+  # dataset_path: null      # For dataset mode (defaults to results_path/offline_dataset.hdf5)
+  
+  # LLM Configuration
+  # model_name: Qwen/Qwen3-4B-Instruct-2507
+  # model_name: Qwen/Qwen3-30B-A3B-Instruct-2507
+  # model_name: Qwen/Qwen3-235B-A22B-Instruct-2507
+  # model_name: meta-llama/Llama-3.3-70B-Instruct
+  # model_name: openai/gpt-5.2
+  # model_name: openai/gpt-5.2-mini
+  # model_name: openai/gpt-5-mini
+  # model_name: openai/gpt-oss-20b
+  model_name: deepseek-ai/DeepSeek-V3.2:preferred
+  # model_name: deepseek-ai/DeepSeek-V3-20250114
+  # model_name: moonshotai/Kimi-K2-Instruct-0905
+  database_path: database/
+  summary_path: summaries_new/
+  behavior_model_path: behavior_models/
+  num_episodes: 10 # Number of episodes to learn from
+  probe_steps: 5   # Number of probe timesteps
+  temperature: 0.0  # LLM generation temperature
+  default_idx: 0    # Default population index to use during the probe phase
+  alpha: 0.0  # Linear opinion pool coefficient for updating the posterior
+  eta: 0.5    # EMA coefficient for updating the likelihoods
+  oracle_likelihood: false  # If true, use the true partner action to compute likelihoods instead of the predicted partner action
+  collect_timestep_data: true
+  use_iql_child_partners: false
+  use_iql_child_obs_norm: true
+  test_iql_checkpoint_dir: ../../../checkpoints/lbf
+
+
+liam_agent:
+  liam: # Name of the partner agent type. Can be arbitrary.
+    path: /home/bhd445/projects/jax-aht/results/lbf/liam_ego_mlp/default_label/2025-12-29_09-57-16/ego_train_run/
+    # path: /home/bhd445/projects/jax-aht/results/lbf/liam_ego_mlp/default_label/2025-12-29_14-25-42/ego_train_run/
+    actor_type: liam # e.g. s5, rnn, mlp
+    EGO_ACTOR_TYPE: mlp
+    ENCODER_TYPE: lstm
+    ENCODER_HIDDEN_DIM: 128
+    ENCODER_OUTPUT_DIM: 20 # Embedding dimension
+    DECODER_HIDDEN_DIM: 128
+    POLICY_INPUT_DIM: 20 # Embedding dimension + observation dimension (obs dim added in the run script)
+    ckpt_key: final_params # Key to load from the checkpoint pytree.
+    idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+    POP_SIZE: 1
+
+meliba_agent:
+  meliba: # Name of the partner agent type. Can be arbitrary.
+    path: /home/bhd445/projects/jax-aht/results/lbf/meliba_ego_mlp/default_label/2025-12-29_19-13-03/ego_train_run/
+    # path: /home/bhd445/projects/jax-aht/results/lbf/liam_ego_mlp/default_label/2025-12-29_14-25-42/ego_train_run/
+    actor_type: meliba # e.g. s5, rnn, mlp
+    EGO_ACTOR_TYPE: mlp
+    ENCODER_STATE_EMBED_DIM: 64
+    ENCODER_ACTION_EMBED_DIM: 64
+    ENCODER_REWARD_EMBED_DIM: 64
+    ENCODER_RNN_HIDDEN_DIM: 64
+    ENCODER_LAYERS_BEFORE_RNN: 64
+    ENCODER_LAYERS_AFTER_RNN: 64
+    ENCODER_LATENT_DIM: 64 # Latent dimension
+
+    DECODER_STATE_EMBED_DIM: 64
+    DECODER_AGENT_CHARACTER_EMBED_DIM: 32
+    DECODER_HIDDEN_DIM: 64
+    DECODER_OUTPUT_DIM: 32
+    POLICY_INPUT_DIM: 20 # Embedding dimension + observation dimension (obs dim added in the run script)
+    ckpt_key: final_params # Key to load from the checkpoint pytree.
+    idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
+    POP_SIZE: 1
+
+############ CQL CONFIG ############
+# CQL-specific configuration for offline RL training
+cql:
+  agent_type: ego_agent  # Which agent in the dataset to train ('ego_agent' or 'partner_agent')
+  seed: 42
+  max_steps: 1000000
+  eval_interval: 100000
+  eval_episodes: 5
+  batch_size: 256
+  project: lbf-cql-offline
+
+# Heldout set for partner evaluation
+heldout_set:
+  lbf:
+    ippo:
+      actor_type: actor_with_conditional_critic
+      path: /home/bhd445/projects/jax-aht/results/lbf/comedi/default_label/2026-03-07_12-47-01/saved_train_run/
+      ckpt_key: final_params_conf
+      idx_list: null
+      POP_SIZE: 6
+      test_mode: false
