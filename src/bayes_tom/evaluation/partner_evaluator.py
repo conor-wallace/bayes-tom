@@ -438,8 +438,8 @@ def run_probe_phase(rng, env, ego_agent, ego_params, partner_population, partner
     joint_act_onehot = jnp.concatenate((act_onehot["agent_0"].reshape(1, 1, -1),
                                              act_onehot["agent_1"].reshape(1, 1, -1)), axis=-1)
 
-    print(f"Starting agent obs: {obs['agent_0']}")
-    print(f"Starting partner obs: {obs['agent_1']}")
+    # print(f"Starting agent obs: {obs['agent_0']}")
+    # print(f"Starting partner obs: {obs['agent_1']}")
 
     trace = ProbeTrace(episode_idx=episode_idx, probe_length=max_episode_steps)
 

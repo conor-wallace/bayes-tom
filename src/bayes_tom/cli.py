@@ -32,7 +32,7 @@ def evaluate(config):
 
     config_dict = _load_config(config_path)
 
-    run_partner_evaluation(config_dict)
+    run_partner_evaluation(config_dict, print_metrics=True)
 
 
 @main.command()

@@ -96,47 +96,47 @@ class BayesToMAgent:
         self.partner_params = partner_params
         self.llm = llm
         self.teammate_types = [f"teammate_{p}" for p in range(ego_population.pop_size)]
-        self.temperature = float(config["task"]["agent_model"]["temperature"])
-        self.default_partner_idx = jnp.array([int(config["task"]["agent_model"]["default_idx"])])
+        self.temperature = float(config["agent_model"]["temperature"])
+        self.default_partner_idx = jnp.array([int(config["agent_model"]["default_idx"])])
         self.pred_partner_idx = self.default_partner_idx
         self.is_learning = False
-        self.probe_length = int(config["task"]["agent_model"]["probe_steps"])
-        self.eta = config["task"]["agent_model"]["eta"]
-        self.alpha = config["task"]["agent_model"]["alpha"]
-        self.delta = 1
-        self.use_oracle_likelihood = config["task"]["agent_model"]["oracle_likelihood"]
+        self.probe_length = int(config["agent_model"]["probe_steps"])
+        self.eta = config["agent_model"]["eta"]
+        self.alpha = config["agent_model"]["alpha"]
+        self.delta = 5
+        self.use_oracle_likelihood = config["agent_model"]["oracle_likelihood"]
         self.posterior = None
 
         self.summary_dir = os.path.join(
-            str(config["task"]["agent_model"]["summary_path"]),
-            str(config["task"]["agent_model"]["model_name"]),
-            str(config["task"]["ENV_NAME"]),
+            str(config["agent_model"]["summary_path"]),
+            str(config["agent_model"]["model_name"]),
+            str(config["ENV_NAME"]),
             "probe_" + str(self.probe_length),
         )
 
         if not os.path.exists(self.summary_dir):
             os.makedirs(self.summary_dir)
 
-        if str(config["task"]["ENV_NAME"]) == "lbf":
-            from policy_switching.features.lbf import LBFBehaviorExtractor as BehaviorExtractor
-            from policy_switching.prompts.lbf import lbf_ip_prompt as ip_prompt
-            from policy_switching.prompts.lbf import lbf_system_prompt as system_prompt
-        elif str(config["task"]["ENV_NAME"]) == "hanabi":
-            from policy_switching.features.hanabi import HanabiBehaviorExtractor as BehaviorExtractor
-            from policy_switching.prompts.hanabi import hanabi_ip_prompt as ip_prompt
-            from policy_switching.prompts.hanabi import hanabi_system_prompt as system_prompt
-        elif "overcooked-v1" in str(config["task"]["ENV_NAME"]):
-            from policy_switching.features.overcooked import OvercookedBehaviorExtractor as BehaviorExtractor
-            from policy_switching.prompts.overcooked import overcooked_ip_prompt as ip_prompt
-            from policy_switching.prompts.overcooked import overcooked_system_prompt as system_prompt
+        if str(config["ENV_NAME"]) == "lbf":
+            from .features.lbf import LBFBehaviorExtractor as BehaviorExtractor
+            from .prompts.lbf import lbf_ip_prompt as ip_prompt
+            from .prompts.lbf import lbf_system_prompt as system_prompt
+        elif str(config["ENV_NAME"]) == "hanabi":
+            from .features.hanabi import HanabiBehaviorExtractor as BehaviorExtractor
+            from .prompts.hanabi import hanabi_ip_prompt as ip_prompt
+            from .prompts.hanabi import hanabi_system_prompt as system_prompt
+        elif "overcooked-v1" in str(config["ENV_NAME"]):
+            from .features.overcooked import OvercookedBehaviorExtractor as BehaviorExtractor
+            from .prompts.overcooked import overcooked_ip_prompt as ip_prompt
+            from .prompts.overcooked import overcooked_system_prompt as system_prompt
 
         self.extractor = BehaviorExtractor()
         self.ip_prompt = ip_prompt
         self.system_prompt = system_prompt
 
         self.behavior_model_dir = os.path.join(
-            str(config["task"]["agent_model"]["behavior_model_path"]),
-            str(config["task"]["ENV_NAME"]),
+            str(config["agent_model"]["behavior_model_path"]),
+            str(config["ENV_NAME"]),
         )
 
         self.behavior_models = {}
@@ -151,6 +151,15 @@ class BayesToMAgent:
     def reset(self):
         self.pred_partner_idx = self.default_partner_idx
         self.posterior = None
+
+        self.behavior_models = {}
+        for partner_idx in range(self.partner_population.pop_size):
+            behavior_model_path = os.path.join(self.behavior_model_dir, f"partner_{partner_idx}_behavior_model.pkl")
+            if os.path.exists(behavior_model_path):
+                self.behavior_models[partner_idx] = KNNBehaviorModel.load(behavior_model_path)
+            else:
+                print(f"Warning: no behavior model found for partner {partner_idx} at {behavior_model_path}. Posterior updates will be uniform.")
+                self.behavior_models[partner_idx] = None
 
     def init_hstate(self, batch_size=1, aux_info=None):
         return self.population.policy_cls.init_hstate(
@@ -236,24 +245,19 @@ class BayesToMAgent:
 
         return "\n".join(past_examples)
 
-    def bayes_update(self, trace):
-        t = len(trace.partner_actions)
+    def linear_opinion_pool(self, llm_scores, bayes_scores):
+        return self.alpha * llm_scores + (1 - self.alpha) * bayes_scores
+
+    def bayes_update(self, scores):
         M = self.partner_population.pop_size
         eps = 1e-12
 
         if self.posterior is None:
             self.posterior = jnp.ones((M,)) / M
 
-        if t == 0:
-            return self.posterior
-
-        partner_action = jnp.array(trace.partner_actions[t - 1])
-        partner_obs = jnp.array(trace.partner_obs[t - 1])
-
         posterior = []
         for partner_idx in range(M):
-            p = self.behavior_models[partner_idx].likelihood(partner_obs, partner_action)
-            p = jnp.clip(jnp.asarray(p), eps, 1.0)
+            p = jnp.clip(jnp.asarray(scores[partner_idx]), eps, 1.0)
 
             loss = 1.0 - p
             weight = 1.0 - self.eta * loss
@@ -263,58 +267,30 @@ class BayesToMAgent:
         self.posterior = posterior / (jnp.sum(posterior) + eps)
         return self.posterior.copy()
 
-    # def bayes_update(self, trace):
-    #     # proper bayesian update
-    #     t = len(trace.partner_actions)
-    #     M = self.partner_population.pop_size
+    def knn_update(self, trace):
+        t = len(trace.partner_actions)
+        M = self.partner_population.pop_size
+        eps = 1e-12
 
-    #     # initialize prior if needed
-    #     if self.posterior is None:
-    #         self.posterior = jnp.ones((M,)) / M
+        # if self.posterior is None:
+        #     self.posterior = jnp.ones((M,)) / M
 
-    #     if t == 0:
-    #         return self.posterior
+        # if t == 0:
+        #     return self.posterior
 
-    #     partner_action = jnp.array(trace.partner_actions[t-1])
-    #     partner_avail_actions = jnp.array(trace.partner_avail_actions[t-1])
-    #     partner_obs = jnp.array(trace.partner_obs[t-1])
+        partner_action = jnp.array(trace.partner_actions[t - 1])
+        partner_obs = jnp.array(trace.partner_obs[t - 1])
 
-    #     hstate = self.init_hstate(batch_size=1)
-    #     rng = jax.random.PRNGKey(1)
+        knn_scores = []
+        for partner_idx in range(M):
+            score = self.behavior_models[partner_idx].likelihood(partner_obs, partner_action)
+            score = jnp.clip(jnp.asarray(score), eps, 1.0)
+            knn_scores.append(score)
 
-    #     likelihoods = []
+        knn_scores = jnp.array(knn_scores)
+        knn_scores = jax.nn.softmax(knn_scores)
 
-    #     for partner_idx in range(M):
-
-    #         if self.use_oracle_likelihood:
-    #             _, _, pi, _ = self.partner_population.get_action_value_policies(
-    #                 pop_params=self.partner_params,
-    #                 agent_indices=jnp.array([partner_idx]),
-    #                 obs=partner_obs.reshape(1, 1, -1),
-    #                 done=jnp.zeros((1, 1), dtype=bool),
-    #                 avail_actions=partner_avail_actions,
-    #                 hstate=hstate,
-    #                 rng=rng,
-    #                 env_state=None,
-    #                 aux_obs=None,
-    #                 test_mode=True
-    #             )
-    #             action_probs = jnp.squeeze(pi.probs)  # (1, A) -> (A,)
-    #             p_a = action_probs[partner_action] + 1e-12    # scalar likelihood p(a_t|o_t, tau)
-    #         else:
-    #             p_a = self.behavior_models[partner_idx].likelihood(partner_obs, partner_action)
-    #             p_a = jnp.asarray(p_a)
-
-    #         likelihoods.append(p_a)
-
-    #     likelihoods = jnp.array(likelihoods)  # (M,)
-
-    #     unnorm = self.posterior * likelihoods
-    #     self.posterior = unnorm / (jnp.sum(unnorm) + 1e-12)
-
-    #     likelihoods = likelihoods / (jnp.sum(likelihoods) + 1e-12)
-
-    #     return likelihoods
+        return knn_scores
 
     def llm_update(self, trace, true_idx):
         probe_text = self.generate_history(trace)
@@ -356,12 +332,15 @@ class BayesToMAgent:
             llm_scores = self.llm_update(trace, true_idx)
 
         if self.alpha == 1:
-            bayes_scores = jnp.zeros((self.partner_population.pop_size,))
+            knn_scores = jnp.zeros((self.partner_population.pop_size,))
         else:
-            bayes_scores = self.bayes_update(trace)
+            knn_scores = self.knn_update(trace)
 
-        posterior = self.alpha * llm_scores + (1 - self.alpha) * bayes_scores
+        scores = self.linear_opinion_pool(llm_scores, knn_scores)
+        posterior = self.bayes_update(scores)
 
+        # print(f"LLM scores: {llm_scores}")
+        # print(f"KNN scores: {knn_scores}")
         # print(f"Posterior: {posterior}")
 
         eps = 1e-8
@@ -383,7 +362,7 @@ class BayesToMAgent:
         if not self.is_learning:
             self.classify_behavior(trace, partner_indices)
 
-        print(f"Selected partner idx: {self.pred_partner_idx[0]} (true idx: {partner_indices[0]})")
+        # print(f"Selected partner idx: {self.pred_partner_idx[0]} (true idx: {partner_indices[0]})")
 
         return self.population.get_actions(params, self.pred_partner_idx, obs, done, avail_actions,
                                            hstate, rng, env_state, aux_obs, test_mode=True)
