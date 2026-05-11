@@ -60,9 +60,10 @@ test_team_path: checkpoints/lbf/parent_checkpoints/
 train_partner_agent:
   type: nested
   population_keys: [nearest_food, farthest_food, central_food]
+  excluded: [0, 4]  # Exclude specific agent indices from the populations (e.g., if you want to exclude certain agents from being selected as the ego agent)
   nearest_food:
     ippo:
-      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+      path: ../../checkpoints/lbf/parent_checkpoints/nearest_food/
       actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
       ckpt_key: final_params_br # Key to load from the checkpoint pytree.
       idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -70,7 +71,7 @@ train_partner_agent:
   
   farthest_food:
     ippo:
-      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+      path: ../../checkpoints/lbf/parent_checkpoints/farthest_food/
       actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
       ckpt_key: final_params_br # Key to load from the checkpoint pytree.
       idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -78,7 +79,7 @@ train_partner_agent:
   
   central_food:
     ippo:
-      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+      path: ../../checkpoints/lbf/parent_checkpoints/central_food/
       actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
       ckpt_key: final_params_br # Key to load from the checkpoint pytree.
       idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -88,9 +89,10 @@ train_partner_agent:
 test_partner_agent:
   type: nested
   population_keys: [nearest_food, farthest_food, central_food]
+  excluded: [0, 4]  # Exclude specific agent indices from the populations (e.g., if you want to exclude certain agents from being selected as the ego agent)
   nearest_food:
     ippo:
-      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+      path: ../../checkpoints/lbf/parent_checkpoints/nearest_food/
       actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
       ckpt_key: final_params_br # Key to load from the checkpoint pytree.
       idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -98,7 +100,7 @@ test_partner_agent:
   
   farthest_food:
     ippo:
-      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+      path: ../../checkpoints/lbf/parent_checkpoints/farthest_food/
       actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
       ckpt_key: final_params_br # Key to load from the checkpoint pytree.
       idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -106,7 +108,7 @@ test_partner_agent:
   
   central_food:
     ippo:
-      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+      path: ../../checkpoints/lbf/parent_checkpoints/central_food/
       actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
       ckpt_key: final_params_br # Key to load from the checkpoint pytree.
       idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -116,9 +118,10 @@ test_partner_agent:
 ego_agent:
   type: nested
   population_keys: [nearest_food, farthest_food, central_food]
+  excluded: [0, 4]  # Exclude specific agent indices from the populations (e.g., if you want to exclude certain agents from being selected as the ego agent)
   nearest_food:
     ippo:
-      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-03-06/saved_train_run/
+      path: ../../checkpoints/lbf/parent_checkpoints/nearest_food/
       actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
       ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
       idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -126,7 +129,7 @@ ego_agent:
   
   farthest_food:
     ippo:
-      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_11-50-18/saved_train_run/
+      path: ../../checkpoints/lbf/parent_checkpoints/farthest_food/
       actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
       ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
       idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -134,7 +137,7 @@ ego_agent:
   
   central_food:
     ippo:
-      path: /home/bhd445/projects/jax-aht/results/lbf/lbrdiv/default_label/2026-05-09_12-12-39/saved_train_run/
+      path: ../../checkpoints/lbf/parent_checkpoints/central_food/
       actor_type: actor_with_conditional_critic # e.g. s5, rnn, mlp
       ckpt_key: final_params_conf # Key to load from the checkpoint pytree.
       idx_list: null # list of checkpoint indices to load from the checkpoint pytree. If null, all checkpoints will be loaded.
@@ -267,8 +270,8 @@ agent_model:
   # Agent configuration for partner evaluation
   # Uncomment and set these to configure the experiment:
   
-  agent_type: "oracle"   # Options: oracle, static, random, plastic, liam, meliba, 
-                         #          llm_zero, llm_cot, llm_few, llm_ip, bayestom, recollab, collab
+  agent_type: "bayes_tom"   # Options: oracle, static, random, plastic, liam, meliba, 
+                         #          llm_zero, llm_cot, llm_few, llm_ip, bayes_tom, recollab, collab
   mode: "evaluate"        # Options: evaluate, probe, learn, dataset, sweep_alpha
   static_idx: 5           # For static agent only
   partner_child_idx: 1
@@ -298,7 +301,7 @@ agent_model:
   probe_steps: 5   # Number of probe timesteps
   temperature: 0.0  # LLM generation temperature
   default_idx: 0    # Default population index to use during the probe phase
-  alpha: 0.0  # Linear opinion pool coefficient for updating the posterior
+  alpha: 1.0  # Linear opinion pool coefficient for updating the posterior
   eta: 0.5    # EMA coefficient for updating the likelihoods
   oracle_likelihood: false  # If true, use the true partner action to compute likelihoods instead of the predicted partner action
   collect_timestep_data: true

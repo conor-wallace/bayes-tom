@@ -124,14 +124,15 @@ class NestedAgentPopulation:
     child agent index is resolved within that selected population.
     '''
 
-    def __init__(self, populations: Sequence[AgentPopulation]):
+    def __init__(self, populations: Sequence[AgentPopulation], excluded: list[int] = []):
         if len(populations) == 0:
             raise ValueError("populations must not be empty")
 
         self.populations = list(populations)
-        self.pop_size = sum([pop.pop_size for pop in self.populations])
         self.sub_pop_sizes = [pop.pop_size for pop in self.populations]
         self.cumulative_sizes = list(accumulate(self.sub_pop_sizes))
+        self.available = list(set(range(sum(self.sub_pop_sizes))) - set(excluded))
+        self.pop_size = len(self.available)
 
     def init_hstate(self, n: int, aux_info: dict=None):
         '''Initialize the hidden state for n members of the population.'''
@@ -159,8 +160,10 @@ class NestedAgentPopulation:
     def _normalize_indices(self, agent_idx):
         agent_idx = _maybe_convert_to_int(agent_idx)
 
-        pop_idx = bisect.bisect_right(self.cumulative_sizes, agent_idx)
-        sub_pop_idx = agent_idx - (self.cumulative_sizes[pop_idx - 1] if pop_idx > 0 else 0)
+        norm_agent_idx = self.available[agent_idx]
+
+        pop_idx = bisect.bisect_right(self.cumulative_sizes, norm_agent_idx)
+        sub_pop_idx = norm_agent_idx - (self.cumulative_sizes[pop_idx - 1] if pop_idx > 0 else 0)
 
         return pop_idx, jnp.array([sub_pop_idx])
 

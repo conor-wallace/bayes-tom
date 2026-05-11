@@ -85,7 +85,6 @@ class BayesToMAgent:
         config,
         ego_population,
         partner_population,
-        partner_params,
         llm: LLMClient,
         eta: float = 0.5,
         alpha: float = 0.9
@@ -93,7 +92,6 @@ class BayesToMAgent:
         self.method = "hybrid"
         self.population = ego_population
         self.partner_population = partner_population
-        self.partner_params = partner_params
         self.llm = llm
         self.teammate_types = [f"teammate_{p}" for p in range(ego_population.pop_size)]
         self.temperature = float(config["agent_model"]["temperature"])
@@ -162,9 +160,7 @@ class BayesToMAgent:
                 self.behavior_models[partner_idx] = None
 
     def init_hstate(self, batch_size=1, aux_info=None):
-        return self.population.policy_cls.init_hstate(
-            batch_size, aux_info={"agent_id": 0}
-        )
+        return self.population.init_hstate(batch_size, aux_info=aux_info)
 
     def learn(
         self,
@@ -351,7 +347,7 @@ class BayesToMAgent:
         # print(f"NLL: {self.nll:.4f}")
 
 
-    def get_action(self, params, partner_indices, obs, done, avail_actions, hstate, rng,
+    def get_action(self, partner_indices, obs, done, avail_actions, hstate, rng,
                    aux_obs=None, env_state=None, test_mode=False, trace=None):
 
         # New method
@@ -364,5 +360,5 @@ class BayesToMAgent:
 
         # print(f"Selected partner idx: {self.pred_partner_idx[0]} (true idx: {partner_indices[0]})")
 
-        return self.population.get_actions(params, self.pred_partner_idx, obs, done, avail_actions,
+        return self.population.get_actions(self.pred_partner_idx, obs, done, avail_actions,
                                            hstate, rng, env_state, aux_obs, test_mode=True)

@@ -428,7 +428,7 @@ def create_ego_agent(agent_type, config, ego_population, train_partner_populatio
         raise ValueError(f"Unknown agent type: {agent_type}")
 
 
-def run_probe_phase(rng, env, ego_agent, ego_params, partner_population, partner_params, partner_idx, episode_idx, max_episode_steps, partner_child_idx=0):    
+def run_probe_phase(rng, env, ego_agent, partner_population, partner_idx, episode_idx, max_episode_steps, partner_child_idx=0):    
     # Reset the env.
     rng, reset_rng = jax.random.split(rng)
     obs, env_state = env.reset(reset_rng)
@@ -444,8 +444,8 @@ def run_probe_phase(rng, env, ego_agent, ego_params, partner_population, partner
     trace = ProbeTrace(episode_idx=episode_idx, probe_length=max_episode_steps)
 
     # Initialize hidden states. Agent id is passed as part of the hstate initialization to support heuristic agents.
-    hstate_0 = ego_agent.population.policy_cls.init_hstate(1, aux_info={"agent_id": 0})
-    hstate_1 = _init_partner_hstate(partner_population, int(partner_idx[0]), partner_child_idx)
+    hstate_0 = ego_agent.init_hstate(1, aux_info={"agent_id": 0})
+    hstate_1 = partner_population.init_hstate(1, aux_info={"agent_id": 1})
     partner_child_idx_batched = jnp.array([partner_child_idx])
 
     t = 0
@@ -462,7 +462,6 @@ def run_probe_phase(rng, env, ego_agent, ego_params, partner_population, partner
 
         # Get ego action
         act_0, hstate_0 = ego_agent.get_action(
-            params=ego_params,
             partner_indices=partner_idx,
             obs=obs["agent_0"].reshape(1, 1, -1),
             done=done["agent_0"].reshape(1, 1),
@@ -476,16 +475,14 @@ def run_probe_phase(rng, env, ego_agent, ego_params, partner_population, partner
         act_0 = act_0.squeeze()
 
         # Get partner action using the underlying policy class's get_action method directly
-        act_1, hstate_1 = _partner_action(
-            partner_population=partner_population,
-            partner_params=partner_params,
-            partner_idx_batched=partner_idx,
-            child_idx_batched=partner_child_idx_batched,
+        act_1, hstate_1 = partner_population.get_actions(
+            agent_indices=partner_idx,
             obs=obs["agent_1"].reshape(1, 1, -1),
             done=done["agent_1"].reshape(1, 1),
             avail_actions=avail_actions_1,
             hstate=hstate_1,
             rng=act1_rng,
+            aux_obs=None,
             env_state=env_state,
         )
         act_1 = act_1.squeeze()
@@ -803,8 +800,7 @@ def evaluate(
     return results
 
 
-def learn(config, env, rng, num_episodes, ego_agent, ego_params,
-          partner_population, partner_params):
+def learn(config, env, rng, num_episodes, ego_agent, partner_population):
     num_partner_total = partner_population.pop_size
     partner_child_idx = config.get("agent_model", {}).get("partner_child_idx", 0)
     results = []
@@ -832,8 +828,8 @@ def learn(config, env, rng, num_episodes, ego_agent, ego_params,
             partner_idx_batched = jnp.array([partner_idx])
             partner_rng, episode_rng = jax.random.split(partner_rng)
             result, trace = run_probe_phase(
-                episode_rng, env, ego_agent, ego_params, 
-                partner_population, partner_params, 
+                episode_rng, env, ego_agent, 
+                partner_population, 
                 partner_idx_batched,  # Pass as array instead of scalar
                 episode_idx,
                 # max_episode_steps=config["agent_model"]["probe_steps"],
@@ -938,7 +934,6 @@ def sweep_alpha(config, env, rng, num_episodes, ego_population, ego_params,
             config=config,
             ego_population=ego_population,
             partner_population=partner_population,
-            partner_params=partner_params,
             llm=llm_client,
         )
 
@@ -993,7 +988,10 @@ def load_nested_population(agent_config, env, agent_init_rng):
         sub_config = agent_config.get(key, {})
         sub_population = load_single_agent_population(sub_config, env, agent_init_rng)
         sub_populations.append(sub_population)
-    return NestedAgentPopulation(populations=sub_populations)
+
+    excluded = agent_config.get("excluded", [])
+
+    return NestedAgentPopulation(populations=sub_populations, excluded=excluded)
 
 
 def load_population(agent_config, env, agent_init_rng):
@@ -1162,8 +1160,8 @@ def run_partner_evaluation(config, print_metrics=False):
         print("Learning from prior experience...")
         learn(
             config, env, eval_rng, num_eval_episodes, 
-            ego_agent, flattened_ego_params, 
-            train_partner_population, train_flattened_partner_params
+            ego_agent, 
+            train_partner_population
         )
 
     # Run evaluation (with optional timestep data collection)
