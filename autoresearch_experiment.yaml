@@ -40,7 +40,7 @@ algorithm:
   ACTIVATION: tanh
 
   # LBRDiv-specific
-  TOLERANCE_FACTOR: 0.1
+  TOLERANCE_FACTOR: 0.2
   LAGRANGE_LR: 0.0001
 
   # Checkpointing / evaluation
