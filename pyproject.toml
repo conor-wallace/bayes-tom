@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Conor Wallace", email = "conorw8@gmail.com" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.10, <3.14"
 license = "Apache-2.0"
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -22,7 +22,7 @@ keywords = []
 dependencies = [
     "click>=8.2.1",
     # JAX AI stack v2025.2.5
-    "jax==0.5.3",
+    # jax itself is installed via the `cpu` or `cuda` dependency group (see below)
     "chex==0.1.88",
     "flax==0.10.2",
     "ml_dtypes==0.4.0",
@@ -70,6 +70,10 @@ cache-keys = [
   { file = "pyproject.toml" },
   { git = { commit = true, tags = true } }, # This ensures dynamic version stays in sync
 ]
+# cpu and cuda are mutually exclusive — uv resolves them in separate passes.
+conflicts = [
+  [{ group = "cpu" }, { group = "cuda" }],
+]
 
 [dependency-groups]
 dev = [
@@ -79,3 +83,8 @@ dev = [
     "pytest>=8.3.5",
     "ruff>=0.14.5",
 ]
+# Install exactly one of these groups depending on your hardware:
+#   CPU:  uv sync --group cpu
+#   CUDA: uv sync --group cuda
+cpu = ["jax[cpu]==0.5.3"]
+cuda = ["jax[cuda12]==0.5.3"]

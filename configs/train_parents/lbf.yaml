@@ -1,0 +1,45 @@
+output_dir: outputs/train_parents/lbf
+
+logger:
+  use_wandb: true
+  project: bayes-tom-parents
+  log_train_out: false
+
+local_logger:
+  save_train_out: true
+
+algorithm:
+  ENV_NAME: lbf
+  ENV_KWARGS: {}
+
+  TRAIN_SEED: 42
+  NUM_SEEDS: 1
+
+  # Population
+  PARTNER_POP_SIZE: 10
+
+  # PPO / rollout
+  NUM_ENVS: 48
+  ROLLOUT_LENGTH: 128
+  TOTAL_TIMESTEPS_PER_ITERATION: 6_000_000
+
+  LR: 5.0e-4
+  ANNEAL_LR: false
+  MAX_GRAD_NORM: 1.0
+  NUM_MINIBATCHES: 8
+  UPDATE_EPOCHS: 15
+  CLIP_EPS: 0.05
+  VF_COEF: 0.5
+  ENT_COEF: 0.001
+  GAMMA: 0.99
+  GAE_LAMBDA: 0.95
+  ACTIVATION: tanh
+
+  # CoMeDi-specific
+  COMEDI_ALPHA: 0.2   # weight on XP (cross-play) objective
+  COMEDI_BETA: 0.4    # weight on MP (mixed-play) objective
+
+  # Checkpointing / evaluation
+  NUM_CHECKPOINTS: 5
+  NUM_ARGMAX_ROLLOUT_EPS: 20
+  NUM_EVAL_EPISODES: 10

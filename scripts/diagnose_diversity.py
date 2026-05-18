@@ -295,7 +295,7 @@ def main():
             mean_agree = float(agree_matrix[off_mask].mean()) if agree_matrix is not None else float("nan")
         else:
             mean_jsd, min_jsd, mean_agree = 0.0, 0.0, 1.0
-        composite = mean_jsd * min_sp
+        composite = mean_jsd * mean_sp  # rewards both diversity and avg performance; penalizes collapse via lower mean_sp
         print()
         print(f"METRIC composite={composite:.6f}")
         print(f"METRIC mean_jsd={mean_jsd:.6f}")

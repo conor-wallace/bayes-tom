@@ -8,29 +8,29 @@ Limitations: does not support recurrent actors.
 '''
 from functools import partial
 import logging
+import os
 import shutil
 import time
 from typing import NamedTuple
 
 from flax.training.train_state import TrainState
-import hydra
 import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
 import wandb
 
-from agents.mlp_actor_critic_agent import ActorWithConditionalCriticPolicy
-from agents.initialize_agents import initialize_actor_with_conditional_critic
-from agents.population_interface import AgentPopulation
-from agents.population_buffer import BufferedPopulation
-from common.save_load_utils import save_train_run
-from common.plot_utils import get_metric_names
-from common.run_episodes import run_episodes
-from envs import make_env
-from envs.log_wrapper import LogWrapper, LogEnvState
-from marl.ippo import make_train as make_ppo_train
-from marl.ppo_utils import Transition, unbatchify, _create_minibatches
+from bayes_tom.agents.policies.mlp_actor_critic_policy import ActorWithConditionalCriticPolicy
+from bayes_tom.agents.policies.initialize_policies import initialize_actor_with_conditional_critic
+from bayes_tom.agents.policies.population_interface import AgentPopulation
+from bayes_tom.agents.policies.population_buffer import BufferedPopulation
+from bayes_tom.utils.save_load_utils import save_train_run
+from bayes_tom.utils.plot_utils import get_metric_names
+from bayes_tom.utils.run_episodes import run_episodes
+from bayes_tom.envs import make_env
+from bayes_tom.envs.log_wrapper import LogWrapper, LogEnvState
+from bayes_tom.marl.ippo import make_train as make_ppo_train
+from bayes_tom.marl.ppo_utils import Transition, unbatchify, _create_minibatches
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -645,23 +645,11 @@ def train_comedi_partners(train_rng, env, config):
                                             traj_batch_mp, gae_mp, target_v_mp,
                                             traj_batch_mp2, gae_mp2, target_v_mp2):
                                 # get policy and value of confederate versus ego and best response agents respectively
-                                xp_one_hot_id = jnp.eye(config["POP_SIZE"])[xp_id]
-                                xp_one_hot_id = jnp.expand_dims(
-                                    jnp.expand_dims(
-                                        xp_one_hot_id, 0
-                                    ), 0
+                                # Minibatch obs is 2D (mb_size, obs_dim); broadcast the one-hot ID to (mb_size, pop_size).
+                                mb_size = traj_batch_xp.obs.shape[0]
+                                aux_obs_xp = jnp.broadcast_to(
+                                    jnp.eye(config["POP_SIZE"])[xp_id], (mb_size, config["POP_SIZE"])
                                 )
-
-                                sp_one_hot_id = jnp.eye(config["POP_SIZE"])[sp_id]
-                                sp_one_hot_id = jnp.expand_dims(
-                                    jnp.expand_dims(
-                                        sp_one_hot_id, 0
-                                    ), 0
-                                )
-
-                                # Agent_0 (confederate) action using policy interface
-                                aux_obs_xp = jnp.repeat(xp_one_hot_id, traj_batch_xp.obs.shape[1], axis=1)
-                                aux_obs_xp = jnp.repeat(aux_obs_xp, traj_batch_xp.obs.shape[0], axis=0)
 
                                 _, value_xp, pi_xp, _ = policy.get_action_value_policy(
                                     params=params,
@@ -673,8 +661,9 @@ def train_comedi_partners(train_rng, env, config):
                                     aux_obs=aux_obs_xp
                                 )
 
-                                aux_obs_sp = jnp.repeat(xp_one_hot_id, traj_batch_sp.obs.shape[1], axis=1)
-                                aux_obs_sp = jnp.repeat(aux_obs_sp, traj_batch_sp.obs.shape[0], axis=0)
+                                aux_obs_sp = jnp.broadcast_to(
+                                    jnp.eye(config["POP_SIZE"])[xp_id], (mb_size, config["POP_SIZE"])
+                                )
                                 _, value_sp, pi_sp, _ = policy.get_action_value_policy(
                                     params=params,
                                     obs=traj_batch_sp.obs,
@@ -1020,10 +1009,15 @@ def get_comedi_population(config, out, env):
         activation=config["algorithm"].get("ACTIVATION", "tanh")
     )
 
-    # Create partner population
+    # Flatten (num_seeds, pop_size, ...) → (num_seeds * pop_size, ...) so the
+    # AgentPopulation treats each seed×policy pair as a separate population member.
+    num_seeds = jax.tree.leaves(partner_params)[0].shape[0]
+    flat_params = jax.tree.map(lambda x: x.reshape((-1,) + x.shape[2:]), partner_params)
+
     partner_population = AgentPopulation(
-        pop_size=comedi_pop_size,
-        policy_cls=partner_policy
+        pop_size=num_seeds * comedi_pop_size,
+        policy_cls=partner_policy,
+        params=flat_params,
     )
 
     return partner_params, partner_population
@@ -1112,14 +1106,17 @@ def log_metrics(config, outs, logger, metric_names: tuple):
     xs = list(range(num_updates))
     keys = [f"pair {i}" for i in range(pop_size)]
 
+    use_wandb = config.get("logger", {}).get("use_wandb", False)
     for loss_name, loss_data in processed_losses.items():
-        logger.log_item(f"Losses/{loss_name}",
-            wandb.plot.line_series(xs=xs, ys=loss_data, keys=keys,
-            title=loss_name, xname="train_step")
-        )
+        if use_wandb:
+            logger.log_item(f"Losses/{loss_name}",
+                wandb.plot.line_series(xs=xs, ys=loss_data, keys=keys,
+                title=loss_name, xname="train_step")
+            )
 
     ### Log artifacts
-    savedir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+    run_timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+    savedir = os.path.join(config.get("output_dir", "outputs/train_parents"), run_timestamp)
     # Save train run output and log to wandb as artifact
     out_savepath = save_train_run(outs, savedir, savename="saved_train_run")
     if config["logger"]["log_train_out"]:

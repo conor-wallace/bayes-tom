@@ -37,7 +37,7 @@ algorithm:
 
   # LBRDiv-specific
   TOLERANCE_FACTOR: 0.1
-  LAGRANGE_LR: 0.01
+  LAGRANGE_LR: 0.001
 
   # Checkpointing / evaluation
   NUM_CHECKPOINTS: 5

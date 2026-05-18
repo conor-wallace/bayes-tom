@@ -137,15 +137,11 @@ class ActorWithConditionalCriticPolicy(AgentPolicy):
     def get_action_value_policy(self, params, obs, done, avail_actions, hstate, rng,
                                 aux_obs=None, env_state=None):
         """Get actions, values, and policy for the policy with conditional critics.
-        The auxiliary observation should be used to pass in the agent ids that we wish to predict
-        values for.
+        aux_obs should carry the one-hot partner ID used to condition the critic.
+        Falls back to a zero dummy ID when aux_obs is None (e.g. during evaluation).
         """
-        dummy_agent_id = jnp.zeros(obs.shape[:-1] + (self.pop_size,))
-        # print("In Get Action Value Policy")
-        # print("Obs shape: ", obs.shape)
-        # print("IDs shape: ", dummy_agent_id.shape)
-        # print("Dense_0 shape: ", params["params"]["Dense_0"]["kernel"].shape)
-        pi, value = self.network.apply(params, (obs, dummy_agent_id, avail_actions))
+        teammate_id = aux_obs if aux_obs is not None else jnp.zeros(obs.shape[:-1] + (self.pop_size,))
+        pi, value = self.network.apply(params, (obs, teammate_id, avail_actions))
         action = pi.sample(seed=rng)
         return action, value, pi, None # no hidden state
 

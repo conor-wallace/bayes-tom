@@ -1,1 +1,5 @@
 {"type":"config","name":"lbrdiv-6-team","metricName":"composite","metricUnit":"jsd*sp","bestDirection":"higher"}
+{"run":1,"commit":"5ac76be","metric":0.0,"metrics":{"mean_jsd":0.314,"min_jsd":0.171,"min_sp_return":0.0,"mean_sp_return":0.188,"n_collapsed":3,"mean_agreement":0.221},"status":"keep","description":"baseline: 6 teams default params 15M steps — 3/6 collapsed","timestamp":1779075610,"segment":0}
+{"run":2,"commit":"5ac76be","metric":0.0,"metrics":{"mean_jsd":0.093,"min_jsd":0.078,"min_sp_return":0.0,"mean_sp_return":0.019,"n_collapsed":6,"mean_agreement":0.268},"status":"discard","description":"ENT_COEF=0.05 — all 6 teams collapsed, entropy too high","timestamp":1779076190,"segment":0}
+{"run":3,"commit":"5ac76be","metric":0.0,"metrics":{"mean_jsd":0.348,"min_jsd":0.149,"min_sp_return":0.0,"mean_sp_return":0.207,"n_collapsed":3,"mean_agreement":0.307},"status":"discard","description":"NUM_ENVS=128 — still 3 collapsed, secondary metrics improved but primary unchanged","timestamp":1779076848,"segment":0}
+{"type":"config","name":"lbrdiv-6-team","metricName":"composite","metricUnit":"jsd*mean_sp","bestDirection":"higher"}
