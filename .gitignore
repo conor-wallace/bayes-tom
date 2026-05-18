@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Autoresearch training outputs (large binary checkpoints)
+src/bayes_tom/autoresearch_outputs/
+autoresearch_outputs/
