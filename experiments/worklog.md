@@ -108,8 +108,127 @@
   SP-XP gap narrower (0.069 vs 0.144), meaning diversity signal is weaker.
 - Next: ANNEAL_LR=true or NUM_ENVS=192/256.
 
+### Run 15: ANNEAL_LR=true — composite=0.229 (DISCARD)
+- Timestamp: 2026-05-18 ~10:20
+- What changed: ANNEAL_LR false → true
+- Result: composite=0.229, mean_jsd=0.458, min_jsd=0.196, min_sp=0.500, mean_sp=0.500, n_collapsed=0
+- Insight: All 6 at max SP (0.50) but br_1/br_2 cluster tightly (JSD=0.196, agree=73%). LR annealing
+  hurts diversity — as LR decays teams converge to same local optima.
+- Next: NUM_ENVS=192 (more SP signal).
+
+### Run 16: NUM_ENVS=192 — composite=0.264 (KEEP — small-env best!)
+- Timestamp: 2026-05-18 ~10:35
+- What changed: NUM_ENVS 128 → 192 (on LAGRANGE_LR=0.001, CLIP_EPS=0.2, 15M steps)
+- Result: composite=0.264, mean_jsd=0.529, min_jsd=0.181, min_sp=0.500, mean_sp=0.500, n_collapsed=0
+- Insight: All 6 at max SP. Highest composite on small env. More envs → less SP variance per update.
+  Min_jsd=0.181 is still limited by small env's strategy ceiling (two "go-right" teams are similar).
+- Next: NUM_ENVS=256 or switch to large env.
+
+### Run 17: NUM_ENVS=256 — composite=0.219 (DISCARD)
+- Timestamp: 2026-05-18 ~10:50
+- What changed: NUM_ENVS 192 → 256
+- Result: composite=0.219, mean_jsd=0.438, min_jsd=0.120, min_sp=0.500, mean_sp=0.500, n_collapsed=0
+- Insight: Severe over-convergence — 4/6 teams in "go-up" cluster (min_jsd=0.120!). Too many envs
+  → over-averaging diversity signal, teams converge to same policy.
+- Next: 192 is the sweet spot. Try large env with different_levels.
+
+---
+## PHASE 2: Large Environment (12×12, 6 food, different_levels=true)
+**Motivation**: Small env (7×7, 3 food) has only ~4 distinct navigation strategies. Teams hit a
+behavioral diversity ceiling — two "go-right" teams always cluster (min_jsd≈0.18). Larger env has
+richer strategy space with both solo-collectible and cooperation-required foods.
+
+**Key difference**: DifferentLevelsGenerator produces [1,1,2,2,2,2] food levels (shuffled) with 2 agents
+both at level 1. Solo foods (level=1) → any team can collect alone. Coop foods (level=2=combined) →
+require both agents. This creates strategic variety without artificially forcing cooperation.
+
+**Environment properties**: time_limit=100 steps (Jumanji default), 12×12 grid, obs_dim=24, fov=12.
+ROLLOUT_LENGTH=128 still used (spans 1.28 episodes per rollout chunk — fine for PPO).
+
+**Reward scale**: Solo food ≈ +1/(2×6)=0.083 per collect; coop food ≈ 2×0.083=0.167. Max if all 6
+collected ≈ 0.833. Current best teams reach mean_sp≈0.25 (≈30% of max, ~1.5 food items per episode).
+
+**Note**: different_levels HURTS the small env (Run 19: SP-XP gap=0.007 — solo foods make XP trivially
+easy, eliminating LBRDiv's diversity pressure). Only works well on large env.
+
+### Run 18: Large env crash + 12x12 force_coop 25M — composite=0.020 (CRASH + DISCARD)
+- Timestamp: 2026-05-18 ~11:20
+- Crashed: obs_dim mismatch (env rebuilt with default 15-dim obs vs trained 24-dim). Fixed --env-kwargs passthrough.
+- Second attempt: 4/6 teams collapsed. force_coop is incompatible with DifferentLevelsGenerator (no effect).
+- Next: Use different_levels properly.
+
+### Run 19: different_levels on small env — composite=0.209 (DISCARD)
+- Timestamp: 2026-05-18 ~11:45
+- What changed: switched to small env (7×7, 3 food) with different_levels=true
+- Result: composite=0.209, mean_sp=0.500, SP-XP gap=0.007, min_jsd=0.307
+- Insight: Solo foods make ANY team easy to work with → XP returns nearly as high as SP → diversity
+  pressure near-zero. Confirmation that different_levels only works as intended in large env.
+- Next: Large env 45M with LAGRANGE_LR=0.001.
+
+### Run 20: Large env 45M LAGRANGE_LR=0.001 — composite=0.088 (DISCARD)
+- Timestamp: 2026-05-18 ~12:10
+- What changed: 12×12 grid, 6 food, different_levels=true, 45M steps, LAGRANGE_LR=0.001, NUM_ENVS=192
+- Result: composite=0.088, mean_jsd=0.518, min_jsd=0.376, min_sp=0.073, mean_sp=0.170, n_collapsed=0
+- Insight: Best diversity ever (min_jsd=0.376 >> small env best 0.181). ALL 6 teams survived!
+  But SP learning hasn't converged — teams still learning basics on harder 12×12 env.
+  LAGRANGE_LR=0.001 (fine for small env) might be too fast for large env.
+- Next: More timesteps (75M) or slower LAGRANGE_LR (0.0001).
+
+### Run 21: Large env 75M LAGRANGE_LR=0.001 — composite=0.076 (DISCARD)
+- Timestamp: 2026-05-18 ~12:40
+- What changed: TOTAL_TIMESTEPS 45M → 75M (same large env, LAGRANGE_LR=0.001)
+- Result: composite=0.076, mean_jsd=0.516, min_jsd=0.338, min_sp=0.063, mean_sp=0.147, n_collapsed=0
+- Insight: SP regressed (0.170→0.147) with more training! Lagrange constraint fighting SP learning.
+  75M with LAGRANGE_LR=0.001 is WORSE than 45M. Lagrange dynamics too fast for large env.
+  LAGRANGE_LR scaling: optimal LR inversely proportional to task difficulty.
+- Next: LAGRANGE_LR=0.0001 (10× slower), still 45M.
+
+### Run 22: Large env 45M LAGRANGE_LR=0.0001 — composite=0.118 (DISCARD)
+- Timestamp: 2026-05-18 ~13:20
+- What changed: LAGRANGE_LR 0.001 → 0.0001
+- Result: composite=0.118, mean_jsd=0.521, min_jsd=0.353, min_sp=0.182, mean_sp=0.226, n_collapsed=0
+- Insight: Huge SP improvement (0.170→0.226). Slower LM lets SP converge before diversity pressure
+  kicks in. SP-XP gap=0.040 (teams are specializing). Could still be training, try 60M.
+- Next: 60M timesteps with LAGRANGE_LR=0.0001.
+
+### Run 23: Large env 45M LAGRANGE_LR=0.0005 — composite=0.094 (DISCARD)
+- Timestamp: 2026-05-18 ~14:00
+- What changed: LAGRANGE_LR 0.0001 → 0.0005 (intermediate, 45M)
+- Result: composite=0.094, mean_jsd=0.505, min_jsd=0.326, min_sp=0.100, mean_sp=0.186, n_collapsed=0
+- Insight: Non-monotonic — 0.0001 beats 0.0005 on both composite and min_jsd. LAGRANGE_LR=0.0001
+  is optimal for large env (10× slower than small env optimum of 0.001).
+- Next: Stick to 0.0001, try 60M.
+
+### Run 24: Large env 60M LAGRANGE_LR=0.0001 — composite=0.127 (DISCARD — large-env best)
+- Timestamp: 2026-05-18 ~14:50
+- What changed: TOTAL_TIMESTEPS 45M → 60M, LAGRANGE_LR=0.0001
+- Result: composite=0.127, mean_jsd=0.508, min_jsd=0.386, min_sp=0.180, mean_sp=0.250, n_collapsed=0
+- Insight: Both SP and diversity still improving vs 45M (mean_sp 0.226→0.250, min_jsd 0.353→0.386).
+  Trend was positive — 60M is better. Best individual team: br_0 at SP=0.318 (38% of max).
+  SP-XP gap=0.072 (larger than 45M's 0.040) — teams are specializing more.
+- Next: 75M timesteps — check if improvement continues or reversal like small env.
+
+### Run 25: Large env 75M LAGRANGE_LR=0.0001 — composite=0.101 (DISCARD)
+- Timestamp: 2026-05-18 ~15:30
+- What changed: TOTAL_TIMESTEPS 60M → 75M, LAGRANGE_LR=0.0001
+- Result: composite=0.101, mean_jsd=0.496, min_jsd=0.393, min_sp=0.187, mean_sp=0.204, n_collapsed=0
+- Insight: SP regressed (0.250→0.204) while min_jsd improved slightly (0.386→0.393). The Lagrange
+  constraint is fighting SP convergence after 60M. 60M is the sweet spot for LAGRANGE_LR=0.0001.
+  Min_jsd still at 0.393 — excellent diversity floor, but SP too weak.
+- Next: Even slower LAGRANGE_LR=0.00005 with 75M — maybe the sweet spot shifts to 75M+ with slower LM.
+
+### Run 26: Large env 75M LAGRANGE_LR=0.00005 — IN PROGRESS
+- Timestamp: 2026-05-18 ~15:50
+- What changed: LAGRANGE_LR 0.0001 → 0.00005 (2× slower), TOTAL_TIMESTEPS=75M
+- Hypothesis: With even slower LM dynamics, the SP→diversity sweet spot shifts to 75M+.
+  Teams can develop better SP policies before diversity pressure kicks in.
+- Expected: mean_sp > 0.250 (current large-env best), min_jsd ≥ 0.35
+
+---
+
 ## Key Insights
 
+### Small Env (7×7, 3 food)
 - **Signal dilution**: 6 teams × random SP sampling → each team's SP pair gets only ~1-2 envs/rollout
   with 64 envs. Fixing with NUM_ENVS=128 is necessary but not sufficient.
 - **Lagrange LR is critical**: Default 0.01 causes 3/6 teams to collapse (early winner lock-in).
@@ -117,19 +236,32 @@
 - **ENT_COEF is HARMFUL**: High entropy bonus causes ALL 6 to collapse. Never raise it above 0.01.
 - **CLIP_EPS=0.2 is the biggest win**: Standard PPO clip allows teams to converge quickly to
   good SP policies. Tight 0.05 clip slows learning and leaves weak teams unable to catch up.
-  With 0.2, ALL 6 teams reached near-optimal SP (0.48-0.50) with high diversity (JSD=0.525).
 - **More timesteps hurt diversity**: At 25M steps teams converge to similar behaviors. 15M is sweet spot.
 - **TOLERANCE_FACTOR=0.1 optimal**: 0.15 causes clustering, 0.2 gives best min_jsd but causes 1 collapse.
-- **LR=5e-4 optimal**: Higher 1e-3 destabilizes with 6 teams.
-- **ROLLOUT_LENGTH tradeoff**: 256 → all 6 at max SP (0.50!) but lower JSD (0.457 vs 0.525). 128 is sweet spot.
-- **Best config (Run 7)**: LAGRANGE_LR=0.001 + NUM_ENVS=128 + CLIP_EPS=0.2 + ROLLOUT_LENGTH=128 + 15M steps.
+- **NUM_ENVS=192 optimal**: 128 gives best results, 256 causes over-convergence and clustering.
+- **Diversity ceiling**: Small env has only ~4 distinct navigation strategies. min_jsd≈0.18 is the ceiling.
+  Two "go-right" teams always cluster regardless of hyperparameters.
+- **Best small-env config (Run 16)**: LAGRANGE_LR=0.001 + NUM_ENVS=192 + CLIP_EPS=0.2 + 15M steps → composite=0.264
+
+### Large Env (12×12, 6 food, different_levels=true)
+- **LAGRANGE_LR scales inversely with task difficulty**: Small env optimum=0.001; large env optimum=0.0001.
+  The harder env needs more time for SP learning before diversity pressure kicks in.
+- **60M is the sweet spot for LAGRANGE_LR=0.0001**: Improvement from 45M→60M, regression at 75M.
+  If we use LAGRANGE_LR=0.00005, the sweet spot may shift to 75M+.
+- **min_jsd is MUCH better in large env**: Consistently 0.35–0.40 vs 0.18 ceiling in small env.
+  More strategy space → teams find genuinely different behavioral niches.
+- **SP performance is the bottleneck**: Mean SP ≈ 0.25 (30% of theoretical max). No team exceeds 0.32.
+  Cooperation on a 12×12 grid requires longer navigation paths. Need more training time or slower LM.
+- **n_collapsed=0 consistently**: Large env doesn't cause collapses once LAGRANGE_LR ≤ 0.0001.
+- **SP-XP gap grows with LAGRANGE_LR slowing**: 0.040 at 45M vs 0.072 at 60M — teams specializing more.
 
 ## Next Ideas
 
-1. ANNEAL_LR=true — annealing often helps final convergence quality; not tried
-2. NUM_ENVS=192 or 256 — further reduces SP sampling variance; not tried
-3. NUM_MINIBATCHES=8 — more gradient updates per rollout with same data
-4. UPDATE_EPOCHS=20 — more epochs per rollout (currently 15)
-5. LAGRANGE_LR=0.002 + CLIP_EPS=0.3 — combining better diversity floor with more aggressive clipping
+1. **LAGRANGE_LR=0.00005, 90M steps** — if 75M is still learning, push further
+2. **LAGRANGE_LR=0.00005, 100M steps** — max training, check if SP keeps improving
+3. **LAGRANGE_LR=0.00001, 75M steps** — even slower LM, last resort
+4. **NUM_ENVS=256 in large env** — more signal per update (didn't work for small env but different regime)
+5. **LR=3e-4 (slower actor LR)** — may help SP convergence on harder task
+6. **TOLERANCE_FACTOR=0.15 or 0.2 in large env** — larger tolerance may help teams develop SP on harder task
 
 ---

@@ -10,7 +10,11 @@ local_logger:
 
 algorithm:
   ENV_NAME: lbf
-  ENV_KWARGS: {}
+  ENV_KWARGS:
+    grid_size: 12
+    num_food: 6
+    fov: 12
+    different_levels: true
 
   TRAIN_SEED: 42
   NUM_SEEDS: 1
@@ -21,9 +25,9 @@ algorithm:
   # PPO / rollout
   NUM_ENVS: 192
   ROLLOUT_LENGTH: 128
-  TOTAL_TIMESTEPS: 15_000_000
+  TOTAL_TIMESTEPS: 60_000_000
 
-  LR: 5.0e-4
+  LR: 3.0e-4
   ANNEAL_LR: false
   MAX_GRAD_NORM: 1.0
   NUM_MINIBATCHES: 4
@@ -37,7 +41,7 @@ algorithm:
 
   # LBRDiv-specific
   TOLERANCE_FACTOR: 0.1
-  LAGRANGE_LR: 0.001
+  LAGRANGE_LR: 0.0001
 
   # Checkpointing / evaluation
   NUM_CHECKPOINTS: 5

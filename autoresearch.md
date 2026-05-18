@@ -59,16 +59,44 @@ then the diagnostic script evaluates the checkpoint.
 
 ## What's Been Tried
 
-### Baseline Context (3-team default config @ 45M steps)
-- br_0 collapsed (SP return = 0.0), br_1 and br_2 achieved 0.5
-- Mean JSD = 0.385, mean agreement = 0.272 (good diversity for surviving teams)
-- Key problem: collapse of one team in a 3-team population; will be worse with 6 teams
+### Phase 1: Small Env (7×7, 3 food, 15M steps)
+**Best config (Run 16)**: `LAGRANGE_LR=0.001, NUM_ENVS=192, CLIP_EPS=0.2` → composite=0.264
+- All 6 teams at max SP=0.500, mean_jsd=0.529, min_jsd=0.181
+- **Diversity ceiling**: Small env has only ~4 distinct navigation strategies (go-right, go-up, go-down-right, etc.)
+  Two "go-right" teams always cluster at min_jsd≈0.18 regardless of hyperparameters.
+- Critical findings:
+  - `ENT_COEF > 0.01` → catastrophic: ALL 6 collapse
+  - `LAGRANGE_LR=0.001` optimal for small env (default 0.01 causes 3/6 collapse)
+  - `CLIP_EPS=0.2` is the biggest win (0.05 = severely tight clip, slow convergence)
+  - `NUM_ENVS=192` optimal; 256 causes over-convergence and clustering
+  - `TOLERANCE_FACTOR=0.1` optimal; 0.15 causes clustering, 0.2 causes 1 collapse
+  - `ANNEAL_LR=true` hurts diversity (teams converge to same local optima)
+  - More training hurts: 25M → diversity falls, 15M is the small env sweet spot
 
-### Experiment Ideas Queue
-1. **Baseline 6-team** (default params, 15M steps) — establish floor
-2. **Higher ENT_COEF** (0.05) — entropy bonus should combat early collapse
-3. **Lower LAGRANGE_LR** (0.005) — more stable multiplier dynamics
-4. **Higher CLIP_EPS** (0.2) — standard PPO; current 0.05 may be too tight
-5. **Lower TOLERANCE_FACTOR** (0.05) — less strict diversity constraint, less collapse risk
-6. **ANNEAL_LR=true** — often helps convergence
-7. Combinations of winners
+### Phase 2: Large Env (12×12, 6 food, different_levels=true) — ACTIVE
+**Context**: User requested larger env for more behavioral diversity headroom.
+`DifferentLevelsGenerator` produces [1,1,2,2,2,2] food levels — 2 solo-collectible + 4 coop-required.
+Time limit: 100 steps (Jumanji default). Obs dim: 24. Max theoretical SP ≈ 0.833 (all 6 collected).
+
+**Current large-env best (Run 24)**: `LAGRANGE_LR=0.0001, 60M steps` → composite=0.127
+- mean_sp=0.250 (30% of max), min_jsd=0.386, n_collapsed=0
+
+**Key large-env findings**:
+- LAGRANGE_LR scales inversely with task difficulty: small env=0.001, large env=0.0001
+- 60M steps is the sweet spot for LAGRANGE_LR=0.0001 (45M→60M improves, 75M regresses)
+- min_jsd consistently 0.35–0.40 — MUCH better than small env ceiling of 0.18
+- SP performance (mean_sp≈0.25) is the bottleneck — harder env needs longer to learn cooperation
+- n_collapsed=0 consistently with LAGRANGE_LR≤0.0001
+- `different_levels` HURTS small env (SP-XP gap→0.007, no diversity pressure); large env only
+- `LAGRANGE_LR=0.0005` worse than 0.0001 at all timesteps (non-monotonic)
+- More training with fast LM: 75M @ LR=0.001 → SP REGRESSES vs 45M
+
+**Current experiment (Run 26)**: `LAGRANGE_LR=0.00005, 75M steps`
+- Hypothesis: 2× slower LM shifts the SP sweet spot to 75M+, achieving mean_sp > 0.250
+
+**Ideas to try next**:
+1. LAGRANGE_LR=0.00005 + 90M steps (if 75M still trending up)
+2. LAGRANGE_LR=0.00001 + 75M steps (extreme slowdown)
+3. NUM_ENVS=256 in large env (more SP signal per update)
+4. LR=3e-4 (slower actor learning, more stable SP convergence)
+5. TOLERANCE_FACTOR=0.15–0.2 (larger tolerance → more SP headroom in hard env)
