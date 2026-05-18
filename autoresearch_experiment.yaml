@@ -19,7 +19,7 @@ algorithm:
   PARTNER_POP_SIZE: 6
 
   # PPO / rollout
-  NUM_ENVS: 64
+  NUM_ENVS: 128
   ROLLOUT_LENGTH: 128
   TOTAL_TIMESTEPS: 15_000_000
 
