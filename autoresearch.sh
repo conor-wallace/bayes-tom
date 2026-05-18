@@ -15,9 +15,8 @@ rm -rf "$INTERNAL_OUTDIR"
 
 cd "$REPO_ROOT"
 
-# Run training (suppress jumanji deprecation warning)
 echo "=== Starting LBRDiv training ==="
-uv run bayes-tom train_lbrdiv "$CONFIG" 2>&1 | grep -v "UserWarning\|pkg_resources\|deprecated as an API\|slated for removal\|Refrain from"
+uv run bayes-tom train-lbrdiv "$CONFIG"
 echo "=== Training complete ==="
 
 # Find the checkpoint produced by this run
@@ -30,5 +29,4 @@ echo "Evaluating checkpoint: $LATEST"
 
 # Run diagnostics with machine-readable metric output
 uv run python scripts/diagnose_diversity.py "$LATEST" \
-    --env lbf --alg lbrdiv --n-eps 20 --n-probe 256 --machine-readable \
-    2>&1 | grep -v "UserWarning\|pkg_resources\|deprecated as an API\|slated for removal\|Refrain from"
+    --env lbf --alg lbrdiv --n-eps 20 --n-probe 256 --machine-readable
