@@ -73,30 +73,30 @@ then the diagnostic script evaluates the checkpoint.
   - `ANNEAL_LR=true` hurts diversity (teams converge to same local optima)
   - More training hurts: 25M → diversity falls, 15M is the small env sweet spot
 
-### Phase 2: Large Env (12×12, 6 food, different_levels=true) — ACTIVE
-**Context**: User requested larger env for more behavioral diversity headroom.
-`DifferentLevelsGenerator` produces [1,1,2,2,2,2] food levels — 2 solo-collectible + 4 coop-required.
-Time limit: 100 steps (Jumanji default). Obs dim: 24. Max theoretical SP ≈ 0.833 (all 6 collected).
+### Phase 2: Large Env (12×12, 6 food, different_levels=true) — COMPLETE ✓
 
-**Current large-env best (Run 24)**: `LAGRANGE_LR=0.0001, 60M steps` → composite=0.127
-- mean_sp=0.250 (30% of max), min_jsd=0.386, n_collapsed=0
+**Context**: `DifferentLevelsGenerator` produces [1,1,2,2,2,2] food levels (2 solo-collectible + 4 coop-required).
+Time limit: 100 steps (Jumanji default). Obs dim: 24. Max theoretical SP ≈ 0.833.
+
+**FINAL BEST (Run 43)**: `LR=1e-4, TOLERANCE=0.2, LAGRANGE_LR=0.0001, NUM_ENVS=192, 350M steps`
+- composite=0.223, mean_jsd=0.510, min_jsd=0.315, mean_sp=0.438, min_sp=0.398
+- n_collapsed=0, mean_agreement=0.355, max_agreement=0.648
+- All 6 teams at 48–56% of theoretical max SP — remarkably balanced
 
 **Key large-env findings**:
-- LAGRANGE_LR scales inversely with task difficulty: small env=0.001, large env=0.0001
-- 60M steps is the sweet spot for LAGRANGE_LR=0.0001 (45M→60M improves, 75M regresses)
-- min_jsd consistently 0.35–0.40 — MUCH better than small env ceiling of 0.18
-- SP performance (mean_sp≈0.25) is the bottleneck — harder env needs longer to learn cooperation
-- n_collapsed=0 consistently with LAGRANGE_LR≤0.0001
-- `different_levels` HURTS small env (SP-XP gap→0.007, no diversity pressure); large env only
-- `LAGRANGE_LR=0.0005` worse than 0.0001 at all timesteps (non-monotonic)
-- More training with fast LM: 75M @ LR=0.001 → SP REGRESSES vs 45M
+- **LR is the primary SP lever**: 5e-4→3e-4→2e-4→1e-4 each ~20-24% SP improvement; slower actor LR lets SP mature before diversity pressure
+- **LAGRANGE_LR scales with task difficulty**: small env=0.001, large env=0.0001
+- **NUM_ENVS=192 optimal**: 256 causes over-convergence and behavioral clustering
+- **TOLERANCE=0.2 breaks two-cluster trap**: at TOL=0.1+LR=2e-4 teams form "go-down" vs "go-up" groups (min_jsd=0.215); TOL=0.2 prevents this
+- **TOLERANCE=0.3 causes re-clustering**: non-monotonic — 0.2 is the sweet spot
+- **350M is the sweet spot for final config**: 300M still improving (+8%), 400M regresses (Lagrange overconstrained SP)
+- **JSD and SP can improve together** up to the sweet spot: 250M→350M, composite 0.200→0.223 (+11.5%)
 
-**Current experiment (Run 26)**: `LAGRANGE_LR=0.00005, 75M steps`
-- Hypothesis: 2× slower LM shifts the SP sweet spot to 75M+, achieving mean_sp > 0.250
-
-**Ideas to try next**:
-1. LAGRANGE_LR=0.00005 + 90M steps (if 75M still trending up)
-2. LAGRANGE_LR=0.00001 + 75M steps (extreme slowdown)
-3. NUM_ENVS=256 in large env (more SP signal per update)
-4. LR=3e-4 (slower actor learning, more stable SP convergence)
-5. TOLERANCE_FACTOR=0.15–0.2 (larger tolerance → more SP headroom in hard env)
+**Settled config** (use for Overcooked/Hanabi as starting point):
+```yaml
+LR: 1.0e-4
+TOLERANCE_FACTOR: 0.2
+LAGRANGE_LR: 0.0001
+NUM_ENVS: 192
+TOTAL_TIMESTEPS: 350_000_000  # adjust per env difficulty
+```
