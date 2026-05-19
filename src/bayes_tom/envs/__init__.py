@@ -4,6 +4,7 @@ import numpy as np
 import jaxmarl
 import jumanji
 from jumanji.environments.routing.lbf.generator import RandomGenerator as LbfGenerator
+from bayes_tom.envs.lbf.different_levels_generator import DifferentLevelsGenerator
 
 def process_default_args(env_kwargs: dict, default_args: dict):
     '''Helper function to process generator and viewer args for Jumanji environments. 
@@ -34,10 +35,14 @@ def make_env(env_name: str, env_kwargs: dict = {}):
         from bayes_tom.envs.lbf.reward_shaping_lbf_wrapper import RewardShapingLBFWrapper
         from bayes_tom.envs.lbf.adhoc_lbf_viewer import AdHocLBFViewer
 
-        generator_args, env_kwargs_copy = process_default_args(env_kwargs, default_generator_args)
+        use_different_levels = env_kwargs.get("different_levels", False)
+        env_kwargs_filtered = {k: v for k, v in env_kwargs.items() if k != "different_levels"}
+
+        generator_args, env_kwargs_copy = process_default_args(env_kwargs_filtered, default_generator_args)
         viewer_args, env_kwargs_copy = process_default_args(env_kwargs_copy, default_viewer_args)
-        env = jumanji.make('LevelBasedForaging-v0', 
-                            generator=LbfGenerator(**generator_args),
+        GeneratorClass = DifferentLevelsGenerator if use_different_levels else LbfGenerator
+        env = jumanji.make('LevelBasedForaging-v0',
+                            generator=GeneratorClass(**generator_args),
                             **env_kwargs_copy,
                             viewer=AdHocLBFViewer(grid_size=generator_args["grid_size"],
                                                   **viewer_args))
